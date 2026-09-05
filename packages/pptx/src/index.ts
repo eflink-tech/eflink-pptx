@@ -3,6 +3,8 @@ import './styles.css'
 
 // 组件
 export { PptxEditor } from './PptxEditor'
+export { setPptxStorageBackend } from './core/editor/persistence'
+export type { PptxStorageBackend } from './core/editor/persistence'
 
 // 状态
 export { useEditorStore } from './store/editorStore'
