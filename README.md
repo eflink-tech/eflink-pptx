@@ -4,6 +4,12 @@
 
 A full-featured presentation editor for the web. Run it standalone, or embed `<PptxEditor />` into your React app.
 
+## 截图预览
+
+| 编辑器 | 图表 | AI 助手 |
+| --- | --- | --- |
+| ![编辑器](docs/screenshots/editor.png) | ![图表](docs/screenshots/chart.png) | ![AI 助手](docs/screenshots/ai-panel.png) |
+
 ## 功能特性
 
 - 幻灯片管理：新建 / 复制 / 删除 / 拖拽排序 / 右键菜单（左侧缩略图面板）
