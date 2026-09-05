@@ -1,0 +1,193 @@
+/* @eflink-tech/pptx 库样式：随包发布为 dist/styles.css，宿主手动引入一次即可。
+   页面级全局样式（html/body 字体、高度等）不属于组件库，由宿主自行提供。 */
+@import "tailwindcss";
+
+:root {
+  --brand: #d14424;
+  --brand-hover: #b93a1d;
+  --brand-light: #fbeae5;
+}
+
+/* 全局滚动条（编辑器面板内滚动条观感） */
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: #d8d8d8;
+  border-radius: 4px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #bbb;
+}
+
+/* 文本选中色 */
+::selection {
+  background: rgba(209, 68, 36, 0.25);
+}
+
+/* 元素旋转缩放柄基样式 */
+.element-handle {
+  width: 10px;
+  height: 10px;
+  background: #fff;
+  border: 1px solid var(--brand);
+  border-radius: 2px;
+  position: absolute;
+}
+
+/* 画布文本：静态 HTML 与 TipTap 共用，段落无外边距，保证所见即所得 */
+.pptx-element .pptx-text-html p,
+.pptx-richtext-editor .ProseMirror p,
+.pptx-element .pptx-text-html ul,
+.pptx-element .pptx-text-html ol,
+.pptx-richtext-editor .ProseMirror ul,
+.pptx-richtext-editor .ProseMirror ol {
+  margin: 0;
+  padding: 0;
+}
+
+/* 就地编辑：去掉焦点蓝框；不强制撑满高度，避免相对静态层下移 */
+.pptx-richtext-editor .pptx-tiptap,
+.pptx-richtext-editor .ProseMirror {
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  line-height: inherit;
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+}
+
+/* 形状内文本就地编辑：与静态层共用 flex 对齐，保证所见即所得 */
+.pptx-shape-text-editor .pptx-tiptap,
+.pptx-shape-text-editor .ProseMirror {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.pptx-shape-text-editor[data-valign="middle"] .ProseMirror { justify-content: center; }
+.pptx-shape-text-editor[data-valign="top"] .ProseMirror { justify-content: flex-start; }
+.pptx-shape-text-editor[data-valign="bottom"] .ProseMirror { justify-content: flex-end; }
+.pptx-shape-text-editor[data-align="left"] .ProseMirror p { text-align: left; }
+.pptx-shape-text-editor[data-align="center"] .ProseMirror p { text-align: center; }
+.pptx-shape-text-editor[data-align="right"] .ProseMirror p { text-align: right; }
+
+.pptx-richtext-editor .ProseMirror:focus {
+  outline: none !important;
+}
+
+/* 隐藏打印之外的内容 */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+}
+
+/* ---------- MathLive 公式编辑器 ---------- */
+math-field {
+  --smart-fence-color: #d14424;
+  font-size: 14px;
+  padding: 4px 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  background: white;
+  width: 100%;
+  box-sizing: border-box;
+}
+math-field:focus-within {
+  border-color: #d14424;
+  outline: none;
+}
+
+/* 弹窗内的大型公式编辑器 */
+.formula-editor-large {
+  --smart-fence-color: #d14424;
+  font-size: 20px !important;
+  padding: 16px 20px !important;
+  min-height: 120px;
+  border: 1px solid #e5e7eb !important;
+  border-radius: 6px !important;
+  background: white !important;
+  width: 100%;
+  box-sizing: border-box;
+}
+.formula-editor-large:focus-within {
+  border-color: #d14424 !important;
+  outline: none;
+}
+
+/* MathLive 虚拟键盘：确保层级高于弹窗（z-index 200 > dialog 150） */
+.ML__keyboard {
+  z-index: 200 !important;
+}
+
+/* 幻灯片上的公式静态渲染：继承元素字号与颜色，占位符样式与编辑器一致 */
+.pptx-formula-display {
+  --hue: 212;
+}
+.pptx-formula-display .ML__latex {
+  font-size: 1em;
+  color: inherit;
+}
+
+/* ---------- 放映：页面切换 ---------- */
+@keyframes trans-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes trans-slideLeft { from { transform: translateX(100%); } to { transform: translateX(0); } }
+@keyframes trans-slideRight { from { transform: translateX(-100%); } to { transform: translateX(0); } }
+@keyframes trans-slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes trans-slideDown { from { transform: translateY(-100%); } to { transform: translateY(0); } }
+@keyframes trans-wipeLeft { from { clip-path: inset(0 0 0 0); } to { clip-path: inset(0 0 0 100%); } }
+@keyframes trans-wipeRight { from { clip-path: inset(0 0 0 0); } to { clip-path: inset(0 100% 0 0); } }
+@keyframes trans-zoomIn { from { transform: scale(0.3); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes trans-zoomOut { from { transform: scale(1.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes trans-flip { from { transform: perspective(1200px) rotateY(80deg); opacity: 0; } to { transform: perspective(1200px) rotateY(0); opacity: 1; } }
+
+.trans-fade { animation: trans-fade 0.5s ease both; }
+.trans-slideLeft { animation: trans-slideLeft 0.5s ease both; }
+.trans-slideRight { animation: trans-slideRight 0.5s ease both; }
+.trans-slideUp { animation: trans-slideUp 0.5s ease both; }
+.trans-slideDown { animation: trans-slideDown 0.5s ease both; }
+.trans-wipeLeft { animation: trans-wipeLeft 0.5s linear both; }
+.trans-wipeRight { animation: trans-wipeRight 0.5s linear both; }
+.trans-zoomIn { animation: trans-zoomIn 0.5s ease both; }
+.trans-zoomOut { animation: trans-zoomOut 0.5s ease both; }
+.trans-flip { animation: trans-flip 0.55s ease both; }
+
+/* ---------- 放映：元素动画 ---------- */
+@keyframes anim-in-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes anim-in-flyInLeft { from { transform: translateX(-120%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+@keyframes anim-in-flyInRight { from { transform: translateX(120%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+@keyframes anim-in-flyInTop { from { transform: translateY(-120%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+@keyframes anim-in-flyInBottom { from { transform: translateY(120%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+@keyframes anim-in-zoomIn { from { transform: scale(0.2); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes anim-in-wipeRight { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+@keyframes anim-in-bounceIn {
+  0% { transform: scale(0.3); opacity: 0; }
+  50% { transform: scale(1.08); opacity: 1; }
+  70% { transform: scale(0.95); }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes anim-em-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+@keyframes anim-em-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-8px); }
+  75% { transform: translateX(8px); }
+}
+@keyframes anim-em-spin { from { transform: rotate(0); } to { transform: rotate(360deg); } }
+@keyframes anim-em-grow { from { transform: scale(0.5); } to { transform: scale(1); } }
+@keyframes anim-out-fade { from { opacity: 1; } to { opacity: 0; } }
+@keyframes anim-out-flyOutRight { from { transform: translateX(0); opacity: 1; } to { transform: translateX(120%); opacity: 0; } }
+@keyframes anim-out-flyOutLeft { from { transform: translateX(0); opacity: 1; } to { transform: translateX(-120%); opacity: 0; } }
+@keyframes anim-out-zoomOut { from { transform: scale(1); opacity: 1; } to { transform: scale(0.2); opacity: 0; } }
+
+/* ---------- 模态框过渡 ---------- */
+@keyframes modal-pop { from { transform: scale(0.96); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.modal-pop { animation: modal-pop 0.16s ease both; }

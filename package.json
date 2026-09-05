@@ -1,0 +1,26 @@
+{
+  "name": "eflink-pptx-monorepo",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "dev:demo": "pnpm --filter eflink-pptx-demo dev",
+    "build": "pnpm --filter @eflink-tech/pptx build && pnpm --filter eflink-pptx-demo build",
+    "lint": "oxlint .",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm --filter @eflink-tech/pptx test",
+    "test:watch": "pnpm --filter @eflink-tech/pptx test:watch",
+    "test:e2e": "playwright test",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "pnpm build && changeset publish",
+    "release:ci": "bash scripts/release-ci.sh"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.29.7",
+    "@playwright/test": "~1.62.1",
+    "oxlint": "^1.79.0",
+    "typescript": "~6.0.2"
+  }
+}

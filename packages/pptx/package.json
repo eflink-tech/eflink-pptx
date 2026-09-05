@@ -1,0 +1,114 @@
+{
+  "name": "@eflink-tech/pptx",
+  "description": "开箱即用的在线演示文稿编辑器 React 组件，可独立运行，也可作为组件嵌入任意 React 应用",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./styles.css": "./dist/styles.css"
+  },
+  "scripts": {
+    "dev": "tsc -p tsconfig.lib.json && vite build --watch",
+    "build": "vite build --emptyOutDir && tsc -p tsconfig.lib.json",
+    "typecheck": "tsc -b",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "peerDependencies": {
+    "react": ">=19.0.0",
+    "react-dom": ">=19.0.0"
+  },
+  "dependencies": {
+    "@tiptap/core": "^3.7.4",
+    "@tiptap/extension-blockquote": "^3.7.4",
+    "@tiptap/extension-bold": "^3.7.4",
+    "@tiptap/extension-bullet-list": "^3.7.4",
+    "@tiptap/extension-code": "^3.7.4",
+    "@tiptap/extension-color": "^3.7.4",
+    "@tiptap/extension-document": "^3.7.4",
+    "@tiptap/extension-dropcursor": "^3.7.4",
+    "@tiptap/extension-gapcursor": "^3.7.4",
+    "@tiptap/extension-hard-break": "^3.7.4",
+    "@tiptap/extension-heading": "^3.7.4",
+    "@tiptap/extension-highlight": "^3.7.4",
+    "@tiptap/extension-history": "^3.7.4",
+    "@tiptap/extension-horizontal-rule": "^3.7.4",
+    "@tiptap/extension-italic": "^3.7.4",
+    "@tiptap/extension-link": "^3.7.4",
+    "@tiptap/extension-list-item": "^3.7.4",
+    "@tiptap/extension-ordered-list": "^3.7.4",
+    "@tiptap/extension-paragraph": "^3.7.4",
+    "@tiptap/extension-strike": "^3.7.4",
+    "@tiptap/extension-subscript": "^3.7.4",
+    "@tiptap/extension-superscript": "^3.7.4",
+    "@tiptap/extension-text": "^3.7.4",
+    "@tiptap/extension-text-align": "^3.7.4",
+    "@tiptap/extension-text-style": "^3.7.4",
+    "@tiptap/extension-underline": "^3.7.4",
+    "@tiptap/pm": "^3.7.4",
+    "@tiptap/react": "^3.7.4",
+    "dexie": "^4.4.5",
+    "echarts": "^6.1.0",
+    "html-to-image": "^1.11.13",
+    "immer": "^11.1.18",
+    "jszip": "^3.10.1",
+    "lucide-react": "^1.37.0",
+    "mathlive": "^0.110.0",
+    "openai": "^6.49.0",
+    "pptxgenjs": "^4.0.1",
+    "zustand": "^5.0.15"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@testing-library/react": "^16.3.3",
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^6.1.0",
+    "fake-indexeddb": "^6.2.5",
+    "jsdom": "^29.1.1",
+    "tailwindcss": "^4.3.3",
+    "typescript": "~6.0.2",
+    "vite": "^8.2.2",
+    "vitest": "^4.1.11"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/eflink-tech/eflink-pptx.git",
+    "directory": "packages/pptx"
+  },
+  "bugs": {
+    "url": "https://github.com/eflink-tech/eflink-pptx/issues"
+  },
+  "homepage": "https://github.com/eflink-tech/eflink-pptx#readme",
+  "keywords": [
+    "pptx",
+    "presentation",
+    "slides",
+    "ppt",
+    "editor",
+    "tiptap",
+    "pptxgenjs",
+    "react-component"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  }
+}
