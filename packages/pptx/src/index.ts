@@ -4,6 +4,7 @@ import './styles.css'
 // 组件
 export { PptxEditor } from './PptxEditor'
 export { setPptxStorageBackend } from './core/editor/persistence'
+export { setEditorBackHref } from './core/editor/chrome'
 export type { PptxStorageBackend } from './core/editor/persistence'
 
 // 状态

@@ -3,11 +3,12 @@ import { useRef, useState } from 'react'
 import logoUrl from '../../assets/pptx-eflink-logo.png'
 import {
   Undo2, Redo2, MonitorPlay, MonitorSpeaker, Sparkles, Grid3x3, LayoutTemplate,
-  Palette, Upload, Download, FolderOpen, FilePlus2, Save, PanelLeft, Keyboard, Search,
+  Palette, Upload, Download, FolderOpen, FilePlus2, Save, PanelLeft, Keyboard, Search, ArrowLeft,
 } from 'lucide-react'
 import { useEditorStore } from '../../store/editorStore'
 import { useUIStore, useToastStore } from '../../store/uiStore'
 import { createDoc, saveDoc } from '../../core/editor/persistence'
+import { getEditorBackHref } from '../../core/editor/chrome'
 import { insertImageFile } from '../../core/editor/media'
 import { InsertMenu } from '../menus/InsertMenu'
 
@@ -39,9 +40,19 @@ export function TopBar() {
   const ui = useUIStore()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [nameEditing, setNameEditing] = useState(false)
+  const backHref = getEditorBackHref()
 
   return (
     <div className="flex h-12 shrink-0 items-center gap-1 border-b border-gray-200 bg-white px-3" data-testid="topbar">
+      {backHref && (
+        <a
+          href={backHref}
+          title="返回"
+          className="mr-1 flex size-8 shrink-0 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
+        >
+          <ArrowLeft size={18} />
+        </a>
+      )}
       <img src={logoUrl} alt="易飞演示文稿" className="mr-1.5 h-8 w-8 rounded-full" />
       <span className="mr-2 text-base font-bold text-[#d14424]">易飞演示文稿</span>
 
