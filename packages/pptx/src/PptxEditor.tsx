@@ -6,14 +6,18 @@ import { AppLayout } from './components/layout/AppLayout'
 import { loadStartupDoc, saveDoc, scheduleAutosave } from './core/editor/persistence'
 import { useEditorStore } from './store/editorStore'
 
-export function PptxEditor(): JSX.Element {
+/**
+ * 组件入口：渲染即获得完整编辑器（顶栏 / 缩略图 / 画布 / 样式面板 / 放映 / AI 助手）
+ * @param bootDocId 指定启动文档 id（如分享查看页注入的只读快照），优先于本地"上次文档"
+ */
+export function PptxEditor({ bootDocId }: { bootDocId?: string } = {}): JSX.Element {
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
     let cancelled = false
     let unsubscribe: (() => void) | undefined
     void (async () => {
-      const doc = await loadStartupDoc()
+      const doc = await loadStartupDoc(bootDocId)
       if (cancelled) return
       useEditorStore.getState().loadDocument(doc)
 
@@ -45,6 +49,8 @@ export function PptxEditor(): JSX.Element {
       cancelled = true
       unsubscribe?.()
     }
+    // bootDocId 仅作为启动参数读取一次，后续变化不重新启动
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   if (!ready) {

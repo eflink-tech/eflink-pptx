@@ -3,7 +3,7 @@ import { useRef, useState } from 'react'
 import logoUrl from '../../assets/pptx-eflink-logo.png'
 import {
   Undo2, Redo2, MonitorPlay, MonitorSpeaker, Sparkles, Grid3x3, LayoutTemplate,
-  Palette, Upload, Download, FolderOpen, FilePlus2, Save, PanelLeft, Keyboard, Search, ArrowLeft,
+  Palette, Upload, Download, FolderOpen, FilePlus2, Save, PanelLeft, Keyboard, Search, ArrowLeft, Share2,
 } from 'lucide-react'
 import { useEditorStore } from '../../store/editorStore'
 import { useUIStore, useToastStore } from '../../store/uiStore'
@@ -11,6 +11,9 @@ import { createDoc, saveDoc } from '../../core/editor/persistence'
 import { getEditorBackHref } from '../../core/editor/chrome'
 import { insertImageFile } from '../../core/editor/media'
 import { InsertMenu } from '../menus/InsertMenu'
+import { ShareDialog } from '../common/ShareDialog'
+import { getPptxShareHandler } from '../../core/share/shareBridge'
+import type { LoadedDoc } from '../../core/editor/persistence'
 
 function ToolButton({ icon, label, onClick, disabled, active }: {
   icon: React.ReactNode
@@ -41,6 +44,18 @@ export function TopBar() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [nameEditing, setNameEditing] = useState(false)
   const backHref = getEditorBackHref()
+  // 分享弹窗（doc 为点击"分享"时刻的文档快照，弹窗期间编辑不影响本次分享内容）
+  const [shareOpen, setShareOpen] = useState(false)
+  const [shareDoc, setShareDoc] = useState<LoadedDoc | null>(null)
+  const closeShare = useRef(() => setShareOpen(false)).current
+  // 分享前先落库最新内容，再捕获当前文档
+  const openShare = async () => {
+    const s = useEditorStore.getState()
+    if (!s.docId) { useToastStore.getState().toast('文档未初始化，无法分享', 'error'); return }
+    await saveDoc(s.docId, s.docName, s.presentation)
+    setShareDoc({ id: s.docId, name: s.docName, presentation: s.presentation })
+    setShareOpen(true)
+  }
 
   return (
     <div className="flex h-12 shrink-0 items-center gap-1 border-b border-gray-200 bg-white px-3" data-testid="topbar">
@@ -86,6 +101,10 @@ export function TopBar() {
       <ToolButton icon={<Upload size={17} />} label="导入（PPTX/JSON）" onClick={() => ui.openModal('import')} />
       <ToolButton icon={<Download size={17} />} label="导出" onClick={() => ui.openModal('export')} />
       <ToolButton icon={<Search size={17} />} label="查找替换（Ctrl+F）" onClick={() => ui.openModal('findReplace')} />
+      {/* 分享入口仅在宿主注入分享实现后出现（纯组件独立运行时不显示） */}
+      {getPptxShareHandler() !== null && (
+        <ToolButton icon={<Share2 size={17} />} label="分享" onClick={() => void openShare()} />
+      )}
 
       <div className="mx-1 h-6 w-px bg-gray-200" />
       <ToolButton icon={<Keyboard size={17} />} label="快捷键" onClick={() => ui.openModal('hotkey')} />
@@ -148,6 +167,8 @@ export function TopBar() {
             )
           : docName}
       </div>
+
+      <ShareDialog open={shareOpen} doc={shareDoc} onClose={closeShare} />
     </div>
   )
 }

@@ -72,7 +72,16 @@ function writeMirror(docId: string | undefined, name: string, presentation: Pres
 }
 
 /** 启动时载入文档：优先 localStorage 镜像（最近状态），否则 Dexie 该文档，否则新建 */
-export async function loadStartupDoc(): Promise<LoadedDoc> {
+export async function loadStartupDoc(bootDocId?: string): Promise<LoadedDoc> {
+  // 指定启动文档（如分享查看页的只读快照）：加载失败不回退访客本地 last-doc，避免串文档
+  if (bootDocId) {
+    try {
+      const rec = await dbGet(bootDocId)
+      if (rec) return { id: rec.id, name: rec.name, presentation: rec.presentation }
+    } catch { /* 忽略，走新建兜底 */ }
+    return { id: genId('doc-'), name: '未命名演示文稿', presentation: createPresentation(genId('slide-')) }
+  }
+
   try {
     const mirror = hasBackend() ? null : localStorage.getItem(MIRROR_KEY)
     if (mirror) {
