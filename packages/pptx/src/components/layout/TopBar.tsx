@@ -3,7 +3,7 @@ import { useRef, useState } from 'react'
 import logoUrl from '../../assets/pptx-eflink-logo.png'
 import {
   Undo2, Redo2, MonitorPlay, MonitorSpeaker, Sparkles, Grid3x3, LayoutTemplate,
-  Palette, Upload, Download, FolderOpen, FilePlus2, Save, PanelLeft, Keyboard, Search, ArrowLeft, Share2,
+  Palette, Upload, Download, FolderOpen, FilePlus2, Save, PanelLeft, Keyboard, Search, ArrowLeft, Share2, MessageCircle,
 } from 'lucide-react'
 import { useEditorStore } from '../../store/editorStore'
 import { useUIStore, useToastStore } from '../../store/uiStore'
@@ -103,7 +103,10 @@ export function TopBar() {
       <ToolButton icon={<Search size={17} />} label="查找替换（Ctrl+F）" onClick={() => ui.openModal('findReplace')} />
       {/* 分享入口仅在宿主注入分享实现后出现（纯组件独立运行时不显示） */}
       {getPptxShareHandler() !== null && (
+        <>
         <ToolButton icon={<Share2 size={17} />} label="分享" onClick={() => void openShare()} />
+        <ToolButton icon={<MessageCircle size={17} />} label="反馈" onClick={() => window.open('/contact', '_blank')} />
+        </>
       )}
 
       <div className="mx-1 h-6 w-px bg-gray-200" />
