@@ -138,10 +138,10 @@ export const useEditorStore = create<EditorState>()(
         s.dirty = false
       }),
 
+    // 仅更新本地名字，不碰内容 dirty：改名由调用方通过 persistence.renameDoc 独立保存（成功后才调用）
     renameDocument: (name) =>
       set((s) => {
         s.docName = name
-        s.dirty = true
       }),
 
     replacePresentation: (p) =>

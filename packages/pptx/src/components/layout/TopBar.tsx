@@ -39,11 +39,8 @@ function ToolButton({ icon, label, onClick, disabled, active }: {
 export function TopBar() {
   const undoDepth = useEditorStore((s) => s.history.length)
   const redoDepth = useEditorStore((s) => s.future.length)
-  const docName = useEditorStore((s) => s.docName)
-  const dirty = useEditorStore((s) => s.dirty)
   const ui = useUIStore()
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [nameEditing, setNameEditing] = useState(false)
   const backHref = getEditorBackHref()
   // 分享弹窗（doc 为点击"分享"时刻的文档快照，弹窗期间编辑不影响本次分享内容）
   const [shareOpen, setShareOpen] = useState(false)
@@ -162,29 +159,7 @@ export function TopBar() {
         <MonitorSpeaker size={15} />
       </button>
 
-      {/* 文档名 */}
-      <div className="ml-2 max-w-[180px] truncate text-xs text-gray-500" data-testid="doc-name"
-        onDoubleClick={() => setNameEditing(true)}
-      >
-        {nameEditing
-          ? (
-              <input
-                autoFocus
-                className="w-36 rounded border border-gray-300 px-1 text-xs"
-                defaultValue={docName}
-                onBlur={(e) => { useEditorStore.getState().renameDocument(e.target.value.trim() || docName); setNameEditing(false) }}
-                onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-              />
-            )
-          : docName}
-      </div>
-
-      {/* 保存状态指示：dirty = 红色未保存；干净 = 灰色已保存（手动 ⌘S/Ctrl+S 云端保存成功后更新） */}
-      <span className="ml-1 shrink-0 select-none text-xs" data-testid="save-state" title={dirty ? '有未保存的修改，按 Ctrl+S 保存' : '所有修改已保存'}>
-        {dirty
-          ? <span className="text-[#e02e2e]">● 未保存</span>
-          : <span className="text-gray-400">✓ 已保存</span>}
-      </span>
+      {/* 文档名与保存状态指示已移至底部状态栏（BottomBar），避免重复显示 */}
 
       <ShareDialog open={shareOpen} doc={shareDoc} onClose={closeShare} />
     </div>

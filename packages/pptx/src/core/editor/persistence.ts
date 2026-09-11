@@ -209,9 +209,21 @@ export async function duplicateDoc(docId: string): Promise<LoadedDoc | null> {
   }
 }
 
-export async function renameDoc(docId: string, name: string): Promise<void> {
+/** 重命名：仅更新文档记录 name 字段（正文不动，不影响内容 dirty）。
+ * 记录尚不存在（新文档未保存过）且传入 presentation 时，退化为整档落库，避免改名刷新后丢失。
+ * 本地模式尽力而为；登录态（后端）失败时向上抛出，由调用方提示"重命名失败"（名字保持原值）。 */
+export async function renameDoc(docId: string, name: string, presentation?: Presentation): Promise<void> {
   try {
     const rec = await dbGet(docId)
-    if (rec) await dbPut({ ...rec, name, updatedAt: Date.now() })
-  } catch { /* 忽略 */ }
+    if (rec) {
+      await dbPut({ ...rec, name, updatedAt: Date.now() })
+      return
+    }
+    if (presentation) {
+      const now = Date.now()
+      await dbPut({ id: docId, name, presentation, createdAt: now, updatedAt: now })
+    }
+  } catch (err) {
+    if (hasBackend()) throw err
+  }
 }

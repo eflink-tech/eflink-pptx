@@ -85,7 +85,13 @@ export function FileManagerDialog() {
   }
 
   const onRename = async (id: string, name: string) => {
-    await renameDoc(id, name)
+    try {
+      await renameDoc(id, name)
+    } catch {
+      toast('重命名失败，请重试', 'error')
+      setRenaming(null)
+      return
+    }
     if (id === currentId) useEditorStore.getState().renameDocument(name)
     setRenaming(null)
     refresh()
