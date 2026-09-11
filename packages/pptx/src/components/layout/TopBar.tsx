@@ -40,6 +40,7 @@ export function TopBar() {
   const undoDepth = useEditorStore((s) => s.history.length)
   const redoDepth = useEditorStore((s) => s.future.length)
   const docName = useEditorStore((s) => s.docName)
+  const dirty = useEditorStore((s) => s.dirty)
   const ui = useUIStore()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [nameEditing, setNameEditing] = useState(false)
@@ -48,11 +49,17 @@ export function TopBar() {
   const [shareOpen, setShareOpen] = useState(false)
   const [shareDoc, setShareDoc] = useState<LoadedDoc | null>(null)
   const closeShare = useRef(() => setShareOpen(false)).current
-  // 分享前先落库最新内容，再捕获当前文档
+  // 分享前强制保存：先落库最新内容，再捕获当前文档；保存失败则中止分享（避免分享远端旧数据）
   const openShare = async () => {
     const s = useEditorStore.getState()
     if (!s.docId) { useToastStore.getState().toast('文档未初始化，无法分享', 'error'); return }
-    await saveDoc(s.docId, s.docName, s.presentation)
+    try {
+      await saveDoc(s.docId, s.docName, s.presentation)
+      s.markSaved()
+    } catch {
+      useToastStore.getState().toast('保存失败，无法分享', 'error')
+      return
+    }
     setShareDoc({ id: s.docId, name: s.docName, presentation: s.presentation })
     setShareOpen(true)
   }
@@ -79,8 +86,9 @@ export function TopBar() {
       <ToolButton icon={<Save size={17} />} label="保存（Ctrl+S）" onClick={() => {
         const s = useEditorStore.getState()
         if (!s.docId) { useToastStore.getState().toast('文档未初始化，无法保存', 'error'); return }
-        saveDoc(s.docId, s.docName, s.presentation).then(s.markSaved)
-        useToastStore.getState().toast('已保存', 'success')
+        saveDoc(s.docId, s.docName, s.presentation)
+          .then(() => { s.markSaved(); useToastStore.getState().toast('已保存', 'success') })
+          .catch(() => useToastStore.getState().toast('保存失败，请重试', 'error'))
       }} />
 
       <div className="mx-1 h-6 w-px bg-gray-200" />
@@ -170,6 +178,13 @@ export function TopBar() {
             )
           : docName}
       </div>
+
+      {/* 保存状态指示：dirty = 红色未保存；干净 = 灰色已保存（手动 ⌘S/Ctrl+S 云端保存成功后更新） */}
+      <span className="ml-1 shrink-0 select-none text-xs" data-testid="save-state" title={dirty ? '有未保存的修改，按 Ctrl+S 保存' : '所有修改已保存'}>
+        {dirty
+          ? <span className="text-[#e02e2e]">● 未保存</span>
+          : <span className="text-gray-400">✓ 已保存</span>}
+      </span>
 
       <ShareDialog open={shareOpen} doc={shareDoc} onClose={closeShare} />
     </div>

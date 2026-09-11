@@ -15,9 +15,9 @@ export type { PptxShareHandler, PptxShareResult } from './core/share/shareBridge
 export { useEditorStore } from './store/editorStore'
 export { useUIStore } from './store/uiStore'
 
-// 持久化（localStorage 镜像 + IndexedDB 多文档）
+// 持久化（localStorage 镜像草稿 + IndexedDB/后端多文档；云端保存为手动触发）
 export {
-  loadStartupDoc, saveDoc, scheduleAutosave, listDocs, createDoc, deleteDoc, duplicateDoc, renameDoc,
+  loadStartupDoc, saveDoc, listDocs, createDoc, deleteDoc, duplicateDoc, renameDoc,
 } from './core/editor/persistence'
 
 // 元素工厂（程序化构建页面用）

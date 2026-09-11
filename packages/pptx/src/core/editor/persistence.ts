@@ -1,4 +1,6 @@
-// 持久化：Dexie 多文档 + localStorage 崩溃恢复镜像 + 自动保存
+// 持久化：Dexie 多文档 + localStorage 崩溃恢复镜像（本地草稿） + 手动云端保存（⌘S/Ctrl+S）
+// 保存策略：内容变化立即写 localStorage 镜像（防崩溃丢稿，不清除 dirty）；
+// 远端/云端保存仅由手动触发，成功后才置 dirty=false。
 import type { Presentation } from '../../types/slides'
 import { createPresentation } from '../../types/slides'
 import { pptxDb, type PPTDocRecord } from '../../files/db'
@@ -30,7 +32,7 @@ function hasBackend(): boolean {
 
 async function dbPut(rec: PPTDocRecord): Promise<void> {
   if (backendOverride) return backendOverride.put(rec)
-  await dbPut(rec)
+  await pptxDb.documents.put(rec)
 }
 
 async function dbGet(id: string): Promise<PPTDocRecord | undefined> {
@@ -71,7 +73,11 @@ function writeMirror(docId: string | undefined, name: string, presentation: Pres
   }
 }
 
-/** 启动时载入文档：优先 localStorage 镜像（最近状态），否则 Dexie 该文档，否则新建 */
+/** 启动时载入文档。加载优先级：
+ * - 登录态（自定义后端）：远端优先 —— 仅当远端加载失败或远端无此文档时，才用 localStorage 镜像恢复本地草稿，
+ *   严禁用旧镜像覆盖远端已保存内容（幽灵修改防护）。
+ * - 本地模式（无后端）：优先镜像（最近状态），否则 Dexie 该文档，否则新建。
+ */
 export async function loadStartupDoc(bootDocId?: string): Promise<LoadedDoc> {
   // 指定启动文档（如分享查看页的只读快照）：加载失败不回退访客本地 last-doc，避免串文档
   if (bootDocId) {
@@ -82,8 +88,36 @@ export async function loadStartupDoc(bootDocId?: string): Promise<LoadedDoc> {
     return { id: genId('doc-'), name: '未命名演示文稿', presentation: createPresentation(genId('slide-')) }
   }
 
+  // 登录态（自定义后端）：远端优先，镜像仅作草稿兜底
+  if (hasBackend()) {
+    let lastId: string | null = null
+    try { lastId = localStorage.getItem(LAST_DOC_KEY) } catch { /* 忽略 */ }
+    if (lastId) {
+      try {
+        const rec = await dbGet(lastId)
+        // 远端有此文档：以远端为准（镜像里的未保存草稿不覆盖远端内容）
+        if (rec) return { id: rec.id, name: rec.name, presentation: rec.presentation }
+      } catch { /* 远端加载失败 → 回退镜像草稿 */ }
+    }
+    // 远端无此文档或加载失败：镜像作为本地草稿恢复（无有效 id 的坏镜像直接丢弃，不回写远端）
+    try {
+      const mirror = localStorage.getItem(MIRROR_KEY)
+      if (mirror) {
+        const parsed = JSON.parse(mirror) as LoadedDoc
+        if (parsed?.presentation?.slides?.length) {
+          if (!parsed.id || parsed.id === 'undefined') {
+            if (lastId && lastId !== 'undefined') parsed.id = lastId
+          }
+          if (parsed.id && parsed.id !== 'undefined') return parsed
+        }
+      }
+    } catch { /* 忽略坏数据 */ }
+    return { id: genId('doc-'), name: '未命名演示文稿', presentation: createPresentation(genId('slide-')) }
+  }
+
+  // 本地模式：优先镜像（最近状态），否则 Dexie 该文档，否则新建
   try {
-    const mirror = hasBackend() ? null : localStorage.getItem(MIRROR_KEY)
+    const mirror = localStorage.getItem(MIRROR_KEY)
     if (mirror) {
       const parsed = JSON.parse(mirror) as LoadedDoc
       if (parsed?.presentation?.slides?.length) {
@@ -120,7 +154,7 @@ export async function loadStartupDoc(bootDocId?: string): Promise<LoadedDoc> {
   return { id: genId('doc-'), name: '未命名演示文稿', presentation: createPresentation(genId('slide-')) }
 }
 
-/** 保存到 Dexie（不存在则创建），并同步镜像 */
+/** 云端保存入口（不存在则创建），并同步镜像。仅由手动保存触发（⌘S/Ctrl+S、保存按钮、分享前、window bridge） */
 export async function saveDoc(docId: string | undefined, name: string, presentation: Presentation): Promise<void> {
   if (!docId) return // docId 无效时跳过，防止写入损坏数据
   writeMirror(docId, name, presentation)
@@ -130,22 +164,11 @@ export async function saveDoc(docId: string | undefined, name: string, presentat
     const existing = await dbGet(docId)
     if (existing) rec.createdAt = existing.createdAt
     await dbPut(rec)
-  } catch { /* Dexie 不可用时镜像仍生效 */ }
-}
-
-/** 自动保存节流（3s 防抖） */
-let saveTimer: number | undefined
-let pending: (() => void) | null = null
-
-export function scheduleAutosave(fn: () => void): void {
-  pending = fn
-  if (saveTimer !== undefined) return
-  saveTimer = window.setTimeout(() => {
-    saveTimer = undefined
-    const task = pending
-    pending = null
-    task?.()
-  }, 3000)
+  } catch (err) {
+    // 本地模式：镜像已写入，容忍 Dexie 失败；登录态（后端）：向上抛出，
+    // 让调用方提示"保存失败"，dirty 保持 true（严禁把失败当成已保存）
+    if (hasBackend()) throw err
+  }
 }
 
 /** 文档列表（按更新时间倒序） */

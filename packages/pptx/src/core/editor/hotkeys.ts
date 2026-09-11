@@ -1,7 +1,7 @@
 // 全局快捷键
 import { useEffect } from 'react'
 import { useEditorStore } from '../../store/editorStore'
-import { useUIStore } from '../../store/uiStore'
+import { useUIStore, useToastStore } from '../../store/uiStore'
 import { saveDoc } from './persistence'
 import { alignElements, type AlignMode } from '../utils/align'
 
@@ -66,10 +66,14 @@ export function useGlobalHotkeys(): void {
         return
       }
 
-      // 保存（无论是否在输入态都拦截）
+      // 手动保存（无论是否在输入态都拦截）：云端保存成功后才清除 dirty；失败保持未保存并提示
       if (mod && (e.key === 's' || e.key === 'S')) {
         e.preventDefault()
-        if (store.docId) saveDoc(store.docId, store.docName, store.presentation).then(store.markSaved)
+        if (store.docId) {
+          saveDoc(store.docId, store.docName, store.presentation)
+            .then(store.markSaved)
+            .catch(() => useToastStore.getState().toast('保存失败，请重试', 'error'))
+        }
         return
       }
 

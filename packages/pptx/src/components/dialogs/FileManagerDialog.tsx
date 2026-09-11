@@ -27,9 +27,14 @@ export function FileManagerDialog() {
   useEffect(refresh, [])
 
   const switchTo = async (id: string) => {
-    // 先保存当前
+    // 先保存当前（云端保存失败时中止切换，避免丢改动）
     const store = useEditorStore.getState()
-    await saveDoc(store.docId, store.docName, store.presentation)
+    try {
+      await saveDoc(store.docId, store.docName, store.presentation)
+    } catch {
+      toast('保存当前文档失败，已取消切换', 'error')
+      return
+    }
         localStorage.setItem('eflink-pptx-last-doc', id)
     localStorage.removeItem('eflink-pptx-mirror')
     const doc = await loadStartupDoc()
@@ -40,7 +45,12 @@ export function FileManagerDialog() {
 
   const onNew = async () => {
     const store = useEditorStore.getState()
-    await saveDoc(store.docId, store.docName, store.presentation)
+    try {
+      await saveDoc(store.docId, store.docName, store.presentation)
+    } catch {
+      toast('保存当前文档失败', 'error')
+      return
+    }
     const doc = await createDoc('未命名演示文稿')
     store.loadDocument(doc)
     toast('已新建文档', 'success')
