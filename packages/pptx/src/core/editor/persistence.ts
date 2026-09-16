@@ -59,8 +59,10 @@ export interface LoadedDoc {
   presentation: Presentation
 }
 
-/** localStorage 镜像（毫秒级写入，Dexie 节流写） */
-function writeMirror(docId: string | undefined, name: string, presentation: Presentation): void {
+/** localStorage 镜像（毫秒级写入，Dexie 节流写）。
+ * 指针始终更新；内容镜像仅本地模式维护——后端模式远端是单一数据源，
+ * 残留其他文档的本地内容会被启动加载误当草稿恢复（串文档），故停用。 */
+export function writeMirror(docId: string | undefined, name: string, presentation: Presentation): void {
   // docId 为 undefined 时不写入（JSON.stringify 会静默丢弃 undefined 字段，导致恢复时丢失）
   if (!docId) return
   try {
@@ -99,17 +101,15 @@ export async function loadStartupDoc(bootDocId?: string): Promise<LoadedDoc> {
         if (rec) return { id: rec.id, name: rec.name, presentation: rec.presentation }
       } catch { /* 远端加载失败 → 回退镜像草稿 */ }
     }
-    // 远端无此文档或加载失败：镜像作为本地草稿恢复（无有效 id 的坏镜像直接丢弃，不回写远端）
+    // 远端无此文档或加载失败：镜像仅当属于同一文档（id 与指针一致）时才作为其未保存草稿恢复。
+    // 不校验 id 会把「上次编辑的其他文档」整份打开——新建空文档会显示旧文档内容，
+    // 其后保存还会把编辑写进那篇旧文档（与 writeMirror 停用后端模式内容镜像的初衷一致）。
+    // 无 id 的旧版镜像不做指针回填（无法证明属于指针文档，宁可丢弃不串文档）
     try {
       const mirror = localStorage.getItem(MIRROR_KEY)
-      if (mirror) {
+      if (mirror && lastId) {
         const parsed = JSON.parse(mirror) as LoadedDoc
-        if (parsed?.presentation?.slides?.length) {
-          if (!parsed.id || parsed.id === 'undefined') {
-            if (lastId && lastId !== 'undefined') parsed.id = lastId
-          }
-          if (parsed.id && parsed.id !== 'undefined') return parsed
-        }
+        if (parsed?.presentation?.slides?.length && parsed.id && parsed.id === lastId) return parsed
       }
     } catch { /* 忽略坏数据 */ }
     return { id: genId('doc-'), name: '未命名演示文稿', presentation: createPresentation(genId('slide-')) }

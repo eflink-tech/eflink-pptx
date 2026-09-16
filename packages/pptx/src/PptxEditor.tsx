@@ -5,7 +5,7 @@
 // 云端保存仅由手动触发（⌘S/Ctrl+S、顶栏保存按钮、分享前强制保存、window bridge save）。
 import { useEffect, useState, type JSX } from 'react'
 import { AppLayout } from './components/layout/AppLayout'
-import { loadStartupDoc, saveDoc } from './core/editor/persistence'
+import { loadStartupDoc, saveDoc, writeMirror } from './core/editor/persistence'
 import { useEditorStore } from './store/editorStore'
 
 /** window bridge 契约：宿主/自动化查询脏状态、手动触发云端保存、丢弃本地草稿 */
@@ -30,8 +30,10 @@ export function PptxEditor({ bootDocId }: { bootDocId?: string } = {}): JSX.Elem
       if (cancelled) return
       useEditorStore.getState().loadDocument(doc)
 
-      // 本地草稿镜像：订阅 dirty 标记，引用比较检测 presentation 变化，
-      // 立即同步写 localStorage 镜像（毫秒级，防崩溃丢稿；不调用远端、不清除 dirty）
+      // 本地草稿镜像：订阅 dirty 标记，引用比较检测 presentation 变化，立即写 localStorage
+      // （毫秒级，防崩溃丢稿；不调用远端、不清除 dirty）。必须经 writeMirror 写入：
+      // 后端模式只更新指针、停用内容镜像（远端是单一数据源）——直接写镜像会让登录态
+      // 残留其他文档的本地内容，启动加载可能把它误当草稿恢复（打开成旧文档）
       let lastPresentation = useEditorStore.getState().presentation
       unsubscribe = useEditorStore.subscribe((state) => {
         if (!state.dirty) return
@@ -39,10 +41,7 @@ export function PptxEditor({ bootDocId }: { bootDocId?: string } = {}): JSX.Elem
         lastPresentation = state.presentation
         const { docId, docName } = useEditorStore.getState()
         if (!docId) return // docId 未初始化时不写入（避免 JSON.stringify 丢弃 undefined 字段）
-        try {
-          localStorage.setItem('eflink-pptx-mirror', JSON.stringify({ id: docId, name: docName, presentation: state.presentation }))
-          localStorage.setItem('eflink-pptx-last-doc', docId)
-        } catch { /* 存储满等异常忽略 */ }
+        writeMirror(docId, docName, state.presentation)
       })
       setReady(true)
     })().catch((err) => {
