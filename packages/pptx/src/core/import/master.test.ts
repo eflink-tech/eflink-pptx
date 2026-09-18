@@ -73,6 +73,30 @@ describe('master.ts', () => {
     expect(parseBackgroundFill(bg, theme)).toEqual({ type: 'image' })
   })
 
+  it('parseBackgroundFill：pattFill lgGrid → SVG 平铺图背景（网格纹理）', () => {
+    const theme = {
+      schemeColors: { bg1: '#FFFFFF', lt1: '#FFFFFF' } as Record<string, string>,
+      majorFont: '', minorFont: '', colorMap: {},
+    }
+    const bg = el(`<p:bg xmlns:p="urn:p" xmlns:a="urn:a">
+      <p:bgPr>
+        <a:pattFill prst="lgGrid">
+          <a:fgClr><a:schemeClr val="bg1"><a:lumMod val="95000"/></a:schemeClr></a:fgClr>
+          <a:bgClr><a:schemeClr val="bg1"/></a:bgClr>
+        </a:pattFill>
+        <a:effectLst/>
+      </p:bgPr>
+    </p:bg>`)
+    const result = parseBackgroundFill(bg, theme)
+    expect(result?.type).toBe('image')
+    if (result?.type !== 'image' || !result.image) throw new Error('expected image bg')
+    expect(result.image.size).toBe('repeat')
+    expect(result.image.src).toContain('data:image/svg+xml')
+    expect(result.image.src).toContain(encodeURIComponent('#FFFFFF'))
+    // OOXML 预设图案 tile 按 0.1 cm 渲染（LibreOffice 实证）→ 3.78px@96dpi 网格距
+    expect(result.image.src).toContain(encodeURIComponent('width="3.78" height="3.78"'))
+  })
+
   it('parseSlideAncestry：背景图片 src 解析失败 → 不保留悬空 image 背景，回退 lt1 兜底', async () => {
     const zip = new JSZip()
     // 版式带图片背景，但 blip r:embed 指向不存在的 rel → src 无法解析

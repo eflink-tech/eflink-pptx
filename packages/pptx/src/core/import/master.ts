@@ -80,7 +80,19 @@ function gradToGradient(gradFill: Element, theme: PptxTheme): Gradient | undefin
   }
 }
 
-/** p:bg → Background（solid/grad/blip；bgRef 以颜色子节点走 solid） */
+/** a:pattFill（lgGrid 网格）→ SVG 平铺图背景；设计稿常用网格纹理底，其余图案不识别返回 undefined */
+function pattFillToBackground(patt: Element, theme: PptxTheme): Background | undefined {
+  if (attr(patt, 'prst') !== 'lgGrid') return undefined
+  const fg = resolveColor(directChild(patt, 'a:fgClr'), theme) ?? '#F2F2F2'
+  const bg = resolveColor(directChild(patt, 'a:bgClr'), theme) ?? '#FFFFFF'
+  // OOXML 预设图案 tile 逻辑尺寸为 8×8 单位，主流渲染器（LibreOffice 实测）按 0.1 cm
+  // 渲染 tile → 网格距 ≈ 3.78px@96dpi；导出侧 tile 固化为位图，按此密度合成（线宽 0.5px、
+  // 置于 0.25 偏移抗锯齿），密度取整会使长程相位漂移、网格大面积错位
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="3.78" height="3.78"><rect width="3.78" height="3.78" fill="${bg}"/><path d="M0.25 0V3.78M0 0.25H3.78" stroke="${fg}" stroke-width="0.5" fill="none"/></svg>`
+  return { type: 'image', image: { src: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`, size: 'repeat' } }
+}
+
+/** p:bg → Background（solid/grad/blip；bgRef 以颜色子节点走 solid；lgGrid 图案转平铺图） */
 export function parseBackgroundFill(bg: Element | null, theme: PptxTheme): Background | undefined {
   if (!bg) return undefined
   const bgPr = directChild(bg, 'p:bgPr')
@@ -95,6 +107,11 @@ export function parseBackgroundFill(bg: Element | null, theme: PptxTheme): Backg
     if (grad) {
       const gradient = gradToGradient(grad, theme)
       if (gradient) return { type: 'gradient', gradient }
+    }
+    const patt = directChild(bgPr, 'a:pattFill')
+    if (patt) {
+      const pattern = pattFillToBackground(patt, theme)
+      if (pattern) return pattern
     }
     // 其余（blipFill 等）：图片背景，src 由调用方按 rels 补充
     return { type: 'image' }
@@ -133,7 +150,7 @@ export async function parseSlideAncestry(
     const bg = firstDescendant(doc.documentElement, 'p:bg')
     const partBg = parseBackgroundFill(bg, theme)
     if (partBg && bg && !background) {
-      if (partBg.type === 'image') {
+      if (partBg.type === 'image' && !partBg.image) {
         // 图片背景：src 解析成功才赋值，否则保持 undefined 由后续部件/lt1 兜底（避免悬空 image 背景）
         const blip = firstDescendant(bg, 'a:blip')
         const embedId = attr(blip, 'r:embed')

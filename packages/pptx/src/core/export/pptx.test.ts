@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { chartNativeSpec, normColor, parseRunsFromHTML, pxToInch as IN, pxToPt as PT, exportShape, withImageHeader, exportPPTX, fontFaceOf } from './pptx'
+import { chartNativeSpec, normColor, parseRunsFromHTML, pxToInch as IN, pxToPt as PT, exportShape, withImageHeader, exportPPTX, fontFaceOf, rotatedBoundsOf, expandThemeFontPlaceholders, injectThemeEaFonts } from './pptx'
 import type { ChartType, Presentation, ShapeElement, Slide } from '../../types/slides'
 import { createDefaultTheme } from '../../types/slides'
 
@@ -106,6 +106,55 @@ describe('parseRunsFromHTML', () => {
     expect(runs[2].options.underline).toBe(true)
   })
 
+  it('解析内联 font-weight/font-style/text-decoration（导入产物用内联样式而非标签）', () => {
+    const result = parseRunsFromHTML(
+      '<p><span style="font-weight:bold">粗</span><span style="font-style:italic">斜</span>' +
+      '<span style="text-decoration:underline">下</span><span style="text-decoration:line-through">删</span></p>',
+    )
+    const runs = result[0].runs
+    expect(runs[0].options.bold).toBe(true)
+    expect(runs[1].options.italic).toBe(true)
+    expect(runs[2].options.underline).toBe(true)
+    expect(runs[3].options.strike).toBe(true)
+  })
+
+  it('中文 run 标记 lang=zh-CN（渲染器按语言选 CJK 字体回退，源文件中文 run 均为 zh-CN）', () => {
+    const result = parseRunsFromHTML(
+      '<p><span style="font-family:\'微软雅黑\', \'Microsoft YaHei\', sans-serif">中文</span>' +
+      '<span style="font-family:\'微软雅黑\', \'Microsoft YaHei\', sans-serif">ABC</span></p>',
+    )
+    expect(result[0].runs[0].options.lang).toBe('zh-CN')
+    expect(result[0].runs[1].options.lang).toBeUndefined()
+  })
+
+  it('run 字体与 theme 字体一致 → +mn 引用占位（LibreOffice 实证：显式写主题字体名 CJK 回退错误）', () => {
+    const themeFonts = { major: 'Arial', majorEa: '微软雅黑', minor: 'Arial', minorEa: '微软雅黑' }
+    // 导入产物：源 run latin=+mn-lt ea=+mn-ea → 栈 [Arial, 微软雅黑]；中文 run 取 ea 位
+    const stack = `'Arial', '微软雅黑', 'PingFang SC', sans-serif`
+    const result = parseRunsFromHTML(`<p><span style="font-family:${stack}">中文</span><span style="font-family:${stack}">ABC</span></p>`, themeFonts)
+    expect(result[0].runs[0].options.fontFace).toBe('+mn-lt')
+    expect(result[0].runs[1].options.fontFace).toBe('+mn-lt')
+    // 与 theme 不一致的字体保持显式名（用户改字体的 run，PowerPoint 正常处理）
+    const custom = parseRunsFromHTML(`<p><span style="font-family:'阿里巴巴普惠体', sans-serif">中文</span></p>`, themeFonts)
+    expect(custom[0].runs[0].options.fontFace).toBe('阿里巴巴普惠体')
+    // 无 theme 字体信息（新建演示）不产生占位
+    const plain = parseRunsFromHTML(`<p><span style="font-family:${stack}">中文</span></p>`)
+    expect(plain[0].runs[0].options.fontFace).toBe('微软雅黑')
+  })
+
+  it('段级 line-height → 行距导出选项（倍数 / px→pt）', () => {
+    // 倍数（spcPct）：0.8 直接透传
+    const multiple = parseRunsFromHTML('<p style="line-height:0.8">标</p>')
+    expect(multiple[0].runs[0].options.lineSpacingMultiple).toBe(0.8)
+    // px（spcPts）：27px → 20.25pt
+    const points = parseRunsFromHTML('<p style="line-height:27px">行</p>')
+    expect(points[0].runs[0].options.lineSpacing).toBeCloseTo(20.25)
+    // 段内多个 run 均携带
+    const multi = parseRunsFromHTML('<p style="line-height:1.5"><span style="color:#FF0000">红</span>黑</p>')
+    expect(multi[0].runs[0].options.lineSpacingMultiple).toBe(1.5)
+    expect(multi[0].runs[1].options.lineSpacingMultiple).toBe(1.5)
+  })
+
   it('多段落生成 breakLine', () => {
     const result = parseRunsFromHTML('<p>一</p><p>二</p>')
     expect(result).toHaveLength(2)
@@ -115,6 +164,17 @@ describe('parseRunsFromHTML', () => {
   it('段落对齐', () => {
     const result = parseRunsFromHTML('<p style="text-align:center">居中</p>')
     expect(result[0].align).toBe('center')
+  })
+
+  it('段落对齐注入段内所有 run（含带格式 run；pptxgenjs 从 run 选项读段落属性，且 align 变化会拆段）', () => {
+    const result = parseRunsFromHTML(
+      '<p style="text-align:center"><span style="color:#FF0000">红</span>黑</p>' +
+      '<p>左对齐段</p>',
+    )
+    expect(result[0].runs[0].options.align).toBe('center')
+    expect(result[0].runs[1].options.align).toBe('center')
+    // 未声明对齐的段落不注入
+    expect(result[1].runs[0].options.align).toBeUndefined()
   })
 
   it('内联 font-family → fontFace：中文 run 取 ea 位，纯西文取 latin 位', () => {
@@ -174,6 +234,29 @@ describe('exportPPTX 导出进度回调', () => {
   })
 })
 
+describe('rotatedBoundsOf 元素旋转外接框', () => {
+  it('无旋转 → 原框', () => {
+    expect(rotatedBoundsOf({ x: 100, y: 50, w: 200, h: 100, rotate: 0 }))
+      .toEqual({ x: 100, y: 50, w: 200, h: 100 })
+    expect(rotatedBoundsOf({ x: 100, y: 50, w: 200, h: 100 }))
+      .toEqual({ x: 100, y: 50, w: 200, h: 100 })
+  })
+
+  it('90° 旋转 → 宽高互换、中心不变', () => {
+    const b = rotatedBoundsOf({ x: 100, y: 50, w: 200, h: 100, rotate: 90 })
+    expect(b.w).toBeCloseTo(100)
+    expect(b.h).toBeCloseTo(200)
+    expect(b.x).toBeCloseTo(100 + (200 - 100) / 2) // 中心 x=200 不变
+    expect(b.y).toBeCloseTo(50 + (100 - 200) / 2)
+  })
+
+  it('45° 旋转 → 外接框扩大', () => {
+    const b = rotatedBoundsOf({ x: 0, y: 0, w: 100, h: 100, rotate: 45 })
+    expect(b.w).toBeCloseTo(100 * Math.SQRT2)
+    expect(b.x).toBeCloseTo(-((100 * Math.SQRT2 - 100) / 2))
+  })
+})
+
 describe('exportShape 自定义 path 分支', () => {
   const slide: Slide = { id: 's1', elements: [] }
   const pres: Presentation = {
@@ -189,6 +272,11 @@ describe('exportShape 自定义 path 分支', () => {
     }
     const spec = await exportShape(dummyPptx, slide, el, pres)
     expect(spec).toMatchObject({ type: 'image' })
+    // 兜底图必须透明背景渲染：白底图会盖住下层相邻文字（目录页角框遮挡「01.」事故）
+    const { renderSlideToBlob } = await import('./image')
+    expect(renderSlideToBlob).toHaveBeenCalledWith(
+      expect.objectContaining({ elements: [el] }), pres, 'png', { transparent: true },
+    )
   })
 
   it('普通预设形状仍走原生分支', async () => {
@@ -198,5 +286,39 @@ describe('exportShape 自定义 path 分支', () => {
     }
     const spec = await exportShape(dummyPptx, slide, el, pres)
     expect(spec).toMatchObject({ type: 'shape', native: 'rect' })
+  })
+})
+
+describe('theme 字体后处理', () => {
+  it('expandThemeFontPlaceholders：+mn/+mj 占位展开为 latin/ea/cs 引用（源文件 run 形式）', () => {
+    const runXml = '<a:rPr lang="zh-CN" sz="9600" b="1" dirty="0">'
+      + '<a:latin typeface="+mn-lt" pitchFamily="34" charset="0"/>'
+      + '<a:ea typeface="+mn-lt" pitchFamily="34" charset="-122"/>'
+      + '<a:cs typeface="+mn-lt" pitchFamily="34" charset="-120"/></a:rPr>'
+    const out = expandThemeFontPlaceholders(runXml)
+    expect(out).toContain('<a:latin typeface="+mn-lt"/><a:ea typeface="+mn-ea"/><a:cs typeface="+mn-ea"/>')
+    expect(out).not.toContain('pitchFamily')
+    // major 占位同理展开为 +mj 形式
+    const mj = expandThemeFontPlaceholders('<a:latin typeface="+mj-lt" pitchFamily="34" charset="0"/><a:ea typeface="+mj-lt" pitchFamily="34" charset="-122"/><a:cs typeface="+mj-lt" pitchFamily="34" charset="-120"/>')
+    expect(mj).toContain('<a:latin typeface="+mj-lt"/><a:ea typeface="+mj-ea"/><a:cs typeface="+mj-ea"/>')
+    // 非占位字体不动
+    expect(expandThemeFontPlaceholders('<a:latin typeface="Arial" pitchFamily="34" charset="0"/>')).toContain('typeface="Arial"')
+  })
+
+  it('injectThemeEaFonts：theme1.xml 注入 a:ea（pptxgenjs 只写 latin 位）', () => {
+    // pptxgenjs 在 latin 后自带空 ea：注入必须替换而非追加（重复 a:ea 为脏 XML）
+    const themeXml = '<a:fontScheme><a:majorFont><a:latin typeface="Arial Light"/><a:ea typeface=""/></a:majorFont>'
+      + '<a:minorFont><a:latin typeface="Arial"/><a:ea typeface=""/></a:minorFont></a:fontScheme>'
+    const out = injectThemeEaFonts(themeXml, { major: 'Arial Light', majorEa: '微软雅黑', minor: 'Arial', minorEa: '微软雅黑' })
+    expect(out).toContain('<a:majorFont><a:latin typeface="Arial Light"/><a:ea typeface="微软雅黑"/></a:majorFont>')
+    expect(out).toContain('<a:minorFont><a:latin typeface="Arial"/><a:ea typeface="微软雅黑"/></a:minorFont>')
+    expect(out.match(/<a:ea /g)).toHaveLength(2)
+    // 无空 ea 的 theme 直接插入
+    const plain = '<a:fontScheme><a:minorFont><a:latin typeface="Arial"/></a:minorFont></a:fontScheme>'
+    expect(injectThemeEaFonts(plain, { major: 'Arial', minor: 'Arial', minorEa: '微软雅黑' }))
+      .toContain('<a:minorFont><a:latin typeface="Arial"/><a:ea typeface="微软雅黑"/></a:minorFont>')
+    // ea 缺失时不注入
+    const noEa = injectThemeEaFonts(themeXml, { major: 'Arial Light', minor: 'Arial' })
+    expect(noEa).toBe(themeXml)
   })
 })

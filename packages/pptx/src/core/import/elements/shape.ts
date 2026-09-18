@@ -1,7 +1,7 @@
 /** p:sp / p:cxnSp → shape / line / text 元素 */
 import { attr, directChild, directChildren, firstDescendant } from '../xml'
 import { resolveColor } from '../styles'
-import { custGeomToPath, getShapeKey } from '../geometry'
+import { custGeomToPath, presetGeomToPath, getShapeKey } from '../geometry'
 import { txBodyToHTML, defRPrOf } from './text'
 import { fontStackOf } from '../fonts'
 import { genId } from '../../utils/id'
@@ -146,16 +146,28 @@ export async function parseShapeEl(
     if (body.autoSize) text.autoSize = true
     if (body.autoFitShape) text.autoFit = true
     if (body.vertical) text.vertical = true
+    // bodyPr anchor：ctr/b 映射 valign（t/未声明为 OOXML 默认顶对齐，不写字段）
+    if (body.anchor === 'ctr') text.valign = 'middle'
+    else if (body.anchor === 'b') text.valign = 'bottom'
     if (shadow) text.shadow = shadow
     return text
   }
 
   // 形状
-  const customPath = custGeom ? custGeomToPath(custGeom, w, h) : null
+  // custGeom / 带调整参数的预设几何（如 snip1Rect）→ 精确 path；粗映射会丢失切角等视觉特征
+  const customPath = custGeom
+    ? custGeomToPath(custGeom, w, h)
+    : presetGeomToPath(prstGeom, prst, w, h)
+  // p:style 样式引用：多数设计稿形状不写显式 solidFill，靠 fillRef/lnRef 引用主题色
+  const styleRef = firstDescendant(node, 'p:style')
+  const fillRef = styleRef ? directChild(styleRef, 'a:fillRef') : null
+  const lnRef = styleRef ? directChild(styleRef, 'a:lnRef') : null
+
   let fill: string | Gradient | undefined
   if (gradFill) fill = parseGradient(gradFill, ctx)
   else if (noFill) fill = '#00000000'
   else if (solidFill) fill = resolveColor(solidFill, ctx.theme) ?? '#00000000'
+  else if (fillRef) fill = resolveColor(fillRef, ctx.theme) ?? '#00000000'
 
   const outline = ln
     ? {
@@ -163,7 +175,14 @@ export async function parseShapeEl(
         width: Math.max(1, Math.round(emu2px(parseInt(attr(ln, 'w') ?? '0', 10)))),
         style: dashOf(ln),
       }
-    : undefined
+    // 无 a:ln 时边框回退 lnRef（idx 1/2/3 ≈ 细/中/粗，按 px 近似）
+    : lnRef
+      ? {
+          color: resolveColor(lnRef, ctx.theme) ?? '#00000000',
+          width: Math.min(3, Math.max(1, parseInt(attr(lnRef, 'idx') ?? '1', 10))),
+          style: 'solid' as const,
+        }
+      : undefined
 
   const shape: ShapeElement = {
     id: genId('s-'), type: 'shape', x, y, w, h,

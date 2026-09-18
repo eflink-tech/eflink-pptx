@@ -61,6 +61,10 @@ function TextItem({
     lineHeight: el.lineHeight ?? 1.5,
     letterSpacing: el.charSpace ? `${el.charSpace}px` : undefined,
     padding: el.padding ?? 8,
+    // 垂直对齐（bodyPr@anchor 导入映射）：flex 纵向布局实现居中/底对齐，顶对齐保持常规流
+    display: el.valign && el.valign !== 'top' ? 'flex' : undefined,
+    flexDirection: 'column',
+    justifyContent: el.valign === 'middle' ? 'center' : el.valign === 'bottom' ? 'flex-end' : undefined,
     // autoFit（源 spAutoFit）：PowerPoint 文本框内容超高时溢出显示而非裁剪（内联样式覆盖 overflow-hidden 类）
     overflow: el.autoFit ? 'visible' : undefined,
     WebkitTextStroke: el.textStroke ? `${el.textStroke.width}px ${el.textStroke.color}` : undefined,

@@ -57,6 +57,43 @@ export function getShapeKey(prst: string): string {
   return PRST_MAP[prst] ?? 'rect'
 }
 
+/** 带调整参数的预设几何 → SVG path（0-100 视口）；不支持的预设返回 null（走 shapeKey 映射）。
+ * 粗映射（如 snip1Rect → rect）会丢失 avLst 调整值导致视觉变形，此类预设在此合成精确路径 */
+export function presetGeomToPath(prstGeom: Element | null, prst: string, w: number, h: number): string | null {
+  if (!prstGeom) return null
+  const gdVal = (name: string): number | null => {
+    const gd = Array.from(prstGeom.getElementsByTagName('a:gd')).find((g) => attr(g, 'name') === name)
+    const m = (gd ? attr(gd, 'fmla') : null)?.match(/val\s+(-?\d+)/)
+    return m ? parseInt(m[1], 10) : null
+  }
+  const gdVals = (names: string[], dflt: number): number[] => {
+    return names.map((name) => gdVal(name) ?? dflt)
+  }
+  const fmt = (n: number) => Math.round(n * 100) / 100
+  // snip1Rect：顶部两角按 adj 切角，切角量 = min(w,h) × adj/100000（OOXML 默认 adj=16667）
+  if (prst === 'snip1Rect') {
+    const [adj] = gdVals(['adj'], 16667)
+    const cut = (Math.min(w, h) * adj) / 100000
+    const x1 = fmt((cut / Math.max(1, w)) * 100)
+    const x2 = fmt(100 - (cut / Math.max(1, w)) * 100)
+    return `M${x1},0 L${x2},0 L100,100 L0,100 Z`
+  }
+  // frame：四边边框，adj1/adj2（1/100000 × min(w,h)）为左上/右下厚度。
+  // 实证：源文件常只声明 adj1（其余边跟随，渲染为均匀边框），adj2 缺省取 adj1；
+  // 两者均缺省取 ECMA 默认 12500。外圈顺时针 + 内圈逆时针，nonzero 填充规则下成环
+  if (prst === 'frame') {
+    const a1 = gdVal('adj1') ?? 12500
+    const a2 = gdVal('adj2') ?? a1
+    const ss = Math.min(w, h)
+    const t1x = (ss * a1) / 100000 / Math.max(1, w)
+    const t1y = (ss * a1) / 100000 / Math.max(1, h)
+    const t2x = (ss * a2) / 100000 / Math.max(1, w)
+    const t2y = (ss * a2) / 100000 / Math.max(1, h)
+    return `M0,0 L100,0 L100,100 L0,100 Z M${fmt(t1x * 100)},${fmt(t1y * 100)} L${fmt(t1x * 100)},${fmt(100 - t2y * 100)} L${fmt(100 - t2x * 100)},${fmt(100 - t2y * 100)} L${fmt(100 - t2x * 100)},${fmt(t1y * 100)} Z`
+  }
+  return null
+}
+
 /** custGeom → SVG path 字符串（归一化 0-100 视口；返回 null 表示无可解析路径） */
 export function custGeomToPath(cust: Element, w: number, h: number): string | null {
   const pathLst = firstDescendant(cust, 'a:pathLst')

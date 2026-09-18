@@ -33,6 +33,56 @@ function el(xml: string): Element {
 }
 
 describe('parseShapeEl', () => {
+  it('p:style fillRef/lnRef 兜底：无显式 solidFill 的形状取主题引用色', async () => {
+    // 多数设计稿形状不写显式填充，靠 p:style 引用主题色（fillRef idx=1 accent1）
+    const xml = `<?xml version="1.0"?>
+<p:sld xmlns:p="urn:p" xmlns:a="urn:a"><p:cSld><p:spTree>
+  <p:sp>
+    <p:nvSpPr><p:cNvPr id="2" name="Donut"/></p:nvSpPr>
+    <p:spPr>
+      <a:xfrm><a:off x="508000" y="1460500"/><a:ext cx="758760" cy="758760"/></a:xfrm>
+      <a:prstGeom prst="donut"/>
+      <a:ln><a:noFill/></a:ln>
+    </p:spPr>
+    <p:style>
+      <a:lnRef idx="2"><a:schemeClr val="accent1"><a:shade val="50000"/></a:schemeClr></a:lnRef>
+      <a:fillRef idx="1"><a:schemeClr val="accent1"/></a:fillRef>
+      <a:effectRef idx="0"><a:schemeClr val="accent1"/></a:effectRef>
+      <a:fontRef idx="minor"><a:schemeClr val="lt1"/></a:fontRef>
+    </p:style>
+    <p:txBody><a:bodyPr rtlCol="0" anchor="ctr"/><a:p><a:endParaRPr/></a:p></p:txBody>
+  </p:sp>
+  <p:sp>
+    <p:nvSpPr><p:cNvPr id="3" name="Para"/></p:nvSpPr>
+    <p:spPr>
+      <a:xfrm><a:off x="10915897" y="1962356"/><a:ext cx="875275" cy="264978"/></a:xfrm>
+      <a:prstGeom prst="parallelogram"/>
+    </p:spPr>
+    <p:style>
+      <a:lnRef idx="2"><a:schemeClr val="accent1"/></a:lnRef>
+      <a:fillRef idx="1"><a:schemeClr val="accent1"/></a:fillRef>
+      <a:effectRef idx="0"><a:schemeClr val="accent1"/></a:effectRef>
+      <a:fontRef idx="minor"><a:schemeClr val="lt1"/></a:fontRef>
+    </p:style>
+    <p:txBody><a:bodyPr/><a:p><a:endParaRPr/></a:p></p:txBody>
+  </p:sp>
+</p:spTree></p:cSld></p:sld>`
+    const { pkg, ctx } = await makeCtx(xml)
+    const sps = el(xml).getElementsByTagName('p:sp')
+    const donut = await parseShapeEl(sps[0], ctx, IDENTITY_XFORM, pkg)
+    const para = await parseShapeEl(sps[1], ctx, IDENTITY_XFORM, pkg)
+    expect(donut?.type).toBe('shape')
+    expect(para?.type).toBe('shape')
+    // donut：fillRef accent1，a:ln 显式 noFill 覆盖 lnRef（无边框）
+    if (donut?.type !== 'shape') throw new Error('expected shape')
+    expect(donut.fill).toBe(theme.schemeColors.accent1)
+    expect(donut.outline?.color).toBe('#00000000')
+    // parallelogram：无 a:ln，边框回退 lnRef 主题色
+    if (para?.type !== 'shape') throw new Error('expected shape')
+    expect(para.fill).toBe(theme.schemeColors.accent1)
+    expect(para.outline?.color).toBe(theme.schemeColors.accent1)
+  })
+
   it('渐变填充 + 阴影 + custGeom path', async () => {
     const xml = `<?xml version="1.0"?>
 <p:sld xmlns:p="urn:p" xmlns:a="urn:a"><p:cSld><p:spTree>

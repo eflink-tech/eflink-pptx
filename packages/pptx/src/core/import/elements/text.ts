@@ -14,6 +14,8 @@ export interface TextBodyResult {
   padding: number | null
   /** bodyPr 含 a:spAutoFit：框随文本自动增高（PowerPoint 中此类文本框内容超高时溢出显示而非裁剪） */
   autoFitShape: boolean
+  /** bodyPr@anchor 垂直对齐（t/ctr/b）；未声明为 null（OOXML 默认顶对齐） */
+  anchor: 't' | 'ctr' | 'b' | null
 }
 
 function escapeHTML(text: string): string {
@@ -44,7 +46,8 @@ function runStyles(rPr: Element | null, defRPr: Element | null, theme: PptxTheme
   const attrOf = (name: string): string | null =>
     (rPr ? attr(rPr, name) : null) ?? (defRPr ? attr(defRPr, name) : null)
   const sz = attrOf('sz')
-  if (sz) styles.push(`font-size:${Math.round(parseInt(sz, 10) / 100 / 0.75)}px`)
+  // 保留两位小数：取整会让导出往返放大误差（20pt→26.67→27px→20.25pt，居中长文本错位累积）
+  if (sz) styles.push(`font-size:${Math.round((parseInt(sz, 10) / 100 / 0.75) * 100) / 100}px`)
   if (attrOf('b') === '1') styles.push('font-weight:bold')
   if (attrOf('i') === '1') styles.push('font-style:italic')
   if (attrOf('u') === 'sng') styles.push('text-decoration:underline')
@@ -56,7 +59,14 @@ function runStyles(rPr: Element | null, defRPr: Element | null, theme: PptxTheme
     styles.push(`letter-spacing:${ls}px`)
   }
   const fill = (rPr ? directChild(rPr, 'a:solidFill') : null) ?? (defRPr ? directChild(defRPr, 'a:solidFill') : null)
-  const color = resolveColor(fill, theme)
+  let color = resolveColor(fill, theme)
+  // 空心字（run 显式 noFill + a:ln 描边）：编辑器不支持文字描边，取描边色近似。
+  // 优先于 defRPr 继承色——源文件 lstStyle 常给 accent1 等默认色，回退会让绿描边字串成蓝
+  if (rPr && directChild(rPr, 'a:noFill')) {
+    const ln = directChild(rPr, 'a:ln')
+    const lnColor = ln ? resolveColor(directChild(ln, 'a:solidFill'), theme) : null
+    if (lnColor) color = lnColor
+  }
   if (color) styles.push(`color:${color}`)
   // 字体栈：latin + ea（含 +mj/+mn 主题引用）；run 未声明字体时回退主题字体——多数源文件
   // 字体继承自主题（run 无 a:latin/a:ea），完全不写字体会让导出 PPTX 在 PowerPoint 中
@@ -127,6 +137,9 @@ export async function txBodyToHTML(
     padding = Math.round((tIns + bIns) / 2 / 9525)
   }
   const autoFitShape = Boolean(bodyPr && directChild(bodyPr, 'a:spAutoFit'))
+  const anchorRaw = attr(bodyPr, 'anchor')
+  const anchor: 't' | 'ctr' | 'b' | null =
+    anchorRaw === 'ctr' || anchorRaw === 'b' || anchorRaw === 't' ? anchorRaw : null
 
   const paragraphs = directChildren(txBody, 'a:p')
   const paras: ParaInfo[] = []
@@ -143,7 +156,7 @@ export async function txBodyToHTML(
     if (Number.isFinite(pctVal) && pctVal > 0) spacing = `line-height:${pctVal / 100000}`
     const pts = lnSpc ? firstDescendant(lnSpc, 'a:spcPts') : null
     const ptsVal = pts ? parseInt(attr(pts, 'val') ?? '', 10) : NaN
-    if (Number.isFinite(ptsVal) && ptsVal > 0) spacing = `line-height:${Math.round(ptsVal / 100 / 0.75)}px`
+    if (Number.isFinite(ptsVal) && ptsVal > 0) spacing = `line-height:${Math.round((ptsVal / 100 / 0.75) * 100) / 100}px`
     paras.push({ align, kind: bulletKind(p), inner, spacing })
   }
 
@@ -165,5 +178,5 @@ export async function txBodyToHTML(
     }
     html.push(`<${tag}>${items.join('')}</${tag}>`)
   }
-  return { html: html.join('') || '<p></p>', autoSize, vertical, padding, autoFitShape }
+  return { html: html.join('') || '<p></p>', autoSize, vertical, padding, autoFitShape, anchor }
 }

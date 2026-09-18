@@ -1,7 +1,7 @@
 // PPTX 导出（pptxgenjs）
 import PptxGenJS from 'pptxgenjs'
 import type {
-  ChartElement, ChartType, FormulaElement, ImageElement, LineElement, PPTElement,
+  ChartElement, ChartType, FormulaElement, ImageElement, LineElement, OoxmlFonts, PPTElement,
   Presentation, ShapeElement, Slide, TableElement, TextElement,
 } from '../../types/slides'
 import { PX_PER_INCH } from '../../types/slides'
@@ -56,6 +56,50 @@ const CJK_RE = /[㐀-䶿一-鿿　-〿＀-￯]/
 function pickFontFace(families: string[] | undefined, text: string): string | undefined {
   if (!families?.length) return undefined
   return CJK_RE.test(text) ? families[1] ?? families[0] : families[0]
+}
+
+/** run 字体 → pptxgenjs fontFace：与 theme fontScheme 字体一致时返回 +mn/+mj 占位，
+ * 由 expandThemeFontPlaceholders 在产物 zip 中展开为 latin/ea/cs 引用。
+ * 实证（LibreOffice）：显式写主题字体名（如微软雅黑）的中文 run 字体替换错误（回退到无关字体），
+ * 经 +mn-lt/+mn-ea → theme fontScheme 解析才能命中正确替换；导入还原场景 run 字体恰来自 theme */
+function runFontFace(
+  families: string[] | undefined,
+  text: string,
+  fonts?: OoxmlFonts,
+): string | undefined {
+  const face = pickFontFace(families, text)
+  if (!face || !fonts) return face
+  const eq = (name?: string) => !!name && name.toLowerCase() === face.toLowerCase()
+  if (eq(fonts.minor) || eq(fonts.minorEa)) return '+mn-lt'
+  if (eq(fonts.major) || eq(fonts.majorEa)) return '+mj-lt'
+  return face
+}
+
+/** pptxgenjs 三位连排（latin/ea/cs 同名同属性）→ 源文件引用形式 latin=+mn-lt / ea=cs=+mn-ea。
+ * 占位符由 runFontFace 写入 fontFace（pptxgenjs 原样进 XML），此处统一展开 */
+const PPTXGENJS_FONT_TRIPLET
+  = '(<a:latin typeface="\\+(mn|mj)-lt" pitchFamily="34" charset="0"/><a:ea typeface="\\+\\2-lt" pitchFamily="34" charset="-122"/><a:cs typeface="\\+\\2-lt" pitchFamily="34" charset="-120"/>)'
+export function expandThemeFontPlaceholders(xml: string): string {
+  return xml.replace(
+    new RegExp(PPTXGENJS_FONT_TRIPLET, 'g'),
+    (_, _m, scope: string) =>
+      `<a:latin typeface="+${scope}-lt"/><a:ea typeface="+${scope}-ea"/><a:cs typeface="+${scope}-ea"/>`,
+  )
+}
+
+/** theme1.xml 注入 a:ea（pptxgenjs 只写 latin 位，且 latin 后自带空 ea）：+mn-ea 解析依赖 fontScheme 的 ea 声明。
+ * latin/ea 一次重写到位，已存在的 ea（空占位）被覆盖，不会产生重复元素 */
+export function injectThemeEaFonts(themeXml: string, fonts: OoxmlFonts): string {
+  let out = themeXml
+  for (const [scope, latin, ea] of [
+    ['majorFont', fonts.major, fonts.majorEa],
+    ['minorFont', fonts.minor, fonts.minorEa],
+  ] as const) {
+    if (!ea) continue
+    const re = new RegExp(`(<a:${scope}><a:latin typeface=")[^"]*("/>)(?:<a:ea typeface="[^"]*"/>)?`)
+    out = out.replace(re, `$1${latin}$2<a:ea typeface="${ea}"/>`)
+  }
+  return out
 }
 
 /** 颜色归一化为 pptxgenjs 需要的 RRGGBB（无 #，透明混合白底） */
@@ -114,7 +158,10 @@ interface TextRun {
   options: Record<string, unknown>
 }
 
-function parseRunsFromHTML(html: string): Array<{ align?: string; runs: TextRun[] }> {
+function parseRunsFromHTML(
+  html: string,
+  themeFonts?: OoxmlFonts,
+): Array<{ align?: string; runs: TextRun[] }> {
   const doc = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html')
   const paragraphs: Array<{ align?: string; runs: TextRun[] }> = []
 
@@ -124,7 +171,10 @@ function parseRunsFromHTML(html: string): Array<{ align?: string; runs: TextRun[
       if (text) {
         const options = { ...style }
         // 字体按文本内容逐 run 选择（中/西文用栈中不同位），fontFamilies 本身不进导出选项
-        if (style.fontFamilies) options.fontFace = pickFontFace(style.fontFamilies as string[], text)
+        if (style.fontFamilies) options.fontFace = runFontFace(style.fontFamilies as string[], text, themeFonts)
+        // 中文 run 标记 zh-CN（pptxgenjs 默认 en-US；渲染器按 run 语言选 CJK 字体回退，
+        // 源文件中文 run 均为 lang="zh-CN" altLang="en-US"，缺省会导致字形度量差异）
+        if (CJK_RE.test(text)) options.lang = 'zh-CN'
         delete options.fontFamilies
         runs.push({ text, options })
       }
@@ -149,6 +199,12 @@ function parseRunsFromHTML(html: string): Array<{ align?: string; runs: TextRun[
       default: break
     }
     const inlineStyle = el.getAttribute('style') ?? ''
+    // 导入产物（TipTap 富文本）用内联样式表达加粗/斜体/下划线/删除线，标签形式兜底
+    if (/font-weight:\s*(bold|[6-9]00)/i.test(inlineStyle)) next.bold = true
+    if (/font-style:\s*italic/i.test(inlineStyle)) next.italic = true
+    const deco = inlineStyle.match(/text-decoration(?:-line)?:\s*([^;]+)/i)?.[1] ?? ''
+    if (deco.includes('underline')) next.underline = true
+    if (deco.includes('line-through')) next.strike = true
     const color = inlineStyle.match(/(?:^|;)\s*color:\s*([^;]+)/i)?.[1]
     if (color) { const c = normColor(color); if (c) next.color = c }
     const fs = inlineStyle.match(/font-size:\s*([\d.]+)px/i)?.[1]
@@ -164,11 +220,23 @@ function parseRunsFromHTML(html: string): Array<{ align?: string; runs: TextRun[
   const blockTags = blocks.length ? blocks : [doc.body]
   for (const block of Array.from(blockTags)) {
     const el = block as HTMLElement
-    const align = (el.getAttribute('style') ?? '').match(/text-align:\s*(\w+)/i)?.[1]
+    const blockStyle = el.getAttribute('style') ?? ''
+    const align = blockStyle.match(/text-align:\s*(\w+)/i)?.[1]
     const runs: TextRun[] = []
     for (const child of Array.from(el.childNodes)) walkInline(child, {}, runs)
     if (runs.length) {
       runs[runs.length - 1].options.breakLine = true
+      // 段级行距注入段内所有 run（pptxgenjs 从 run 选项读取段落属性）：
+      // 倍数 → lineSpacingMultiple（spcPct）；px → lineSpacing（spcPts，px→pt）
+      const lh = blockStyle.match(/line-height:\s*([\d.]+)(px)?/i)
+      if (lh) {
+        const v = parseFloat(lh[1])
+        if (lh[2]) { for (const r of runs) r.options.lineSpacing = PT(v) }
+        else { for (const r of runs) r.options.lineSpacingMultiple = v }
+      }
+      // 段级对齐注入段内所有 run（pptxgenjs 从 run 选项读段落属性，且 align 变化会拆段，
+      // 段内必须统一；缺省对齐的段落不注入，避免与后续段落比较产生错误分段）
+      if (align) { for (const r of runs) r.options.align = align }
       paragraphs.push({ align, runs })
     }
   }
@@ -178,13 +246,54 @@ function parseRunsFromHTML(html: string): Array<{ align?: string; runs: TextRun[
 
 /* ---------- 元素导出 ---------- */
 
+/** 元素（含旋转）的外接框：旋转后视觉范围，中心不变。兜底图片按此框从整幅画布渲染中裁剪 */
+export function rotatedBoundsOf(el: { x: number; y: number; w: number; h: number; rotate?: number }): { x: number; y: number; w: number; h: number } {
+  const rad = ((el.rotate ?? 0) * Math.PI) / 180
+  const cos = Math.abs(Math.cos(rad))
+  const sin = Math.abs(Math.sin(rad))
+  const w = el.w * cos + el.h * sin
+  const h = el.w * sin + el.h * cos
+  return { x: el.x + (el.w - w) / 2, y: el.y + (el.h - h) / 2, w, h }
+}
+
+/** 从画布渲染 PNG 中裁剪 [x,y,w,h]（画布坐标系）→ 裸 base64。
+ * renderSlideToBlob 产出整幅画布（pixelRatio 2），直接嵌入会让整页图缩进元素框 */
+async function cropCanvasPng(buf: ArrayBuffer, x: number, y: number, w: number, h: number, canvasW: number): Promise<string | null> {
+  const url = URL.createObjectURL(new Blob([buf], { type: 'image/png' }))
+  try {
+    const img = new Image()
+    // blob URL 本地解码为毫秒级；超时兜底防环境（无资源加载能力的测试环境）挂起
+    await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('image decode timeout')), 3000)
+      img.onload = () => { clearTimeout(timer); resolve(null) }
+      img.onerror = () => { clearTimeout(timer); reject(new Error('image decode failed')) }
+      img.src = url
+    })
+    const scale = img.naturalWidth / canvasW
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.max(1, Math.round(w * scale))
+    canvas.height = Math.max(1, Math.round(h * scale))
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return null
+    ctx.drawImage(img, x * scale, y * scale, w * scale, h * scale, 0, 0, canvas.width, canvas.height)
+    return canvas.toDataURL('image/png').split(',')[1]
+  } catch {
+    return null
+  } finally {
+    URL.revokeObjectURL(url)
+  }
+}
+
 async function elementToImage(el: PPTElement, slide: Slide, presentation: Presentation): Promise<string | null> {
   // 用离屏渲染兜底导出（不支持的原生形状/公式等）
   try {
     const onlyElSlide: Slide = { ...slide, elements: [el] }
-    const blob = await renderSlideToBlob(onlyElSlide, presentation, 'png')
+    // 透明背景：兜底图内嵌回页面后叠在其他元素上，白底会盖住下层相邻文字
+    const blob = await renderSlideToBlob(onlyElSlide, presentation, 'png', { transparent: true })
+    // 旋转元素在画布上已按最终角度渲染：裁旋转外接框，嵌入时不再二次旋转
+    const b = rotatedBoundsOf(el)
     const buf = await blob.arrayBuffer()
-    return bufToBase64(buf)
+    return await cropCanvasPng(buf, b.x, b.y, b.w, b.h, presentation.width)
   } catch {
     return null
   }
@@ -209,14 +318,11 @@ async function ensureDataUrl(src: string): Promise<string | null> {
 async function exportText(pptx: PptxGenJS, slide: Slide, el: TextElement, pres: Presentation): Promise<object> {
   void pptx
   void slide
-  void pres
-  const paragraphs = parseRunsFromHTML(el.content)
+  const paragraphs = parseRunsFromHTML(el.content, pres.theme.ooxmlFonts)
   const runs: TextRun[] = []
   for (const p of paragraphs) {
     for (const run of p.runs) {
-      const opts = { ...run.options }
-      if (p.align && Object.keys(opts).length <= 1) opts.align = p.align
-      runs.push({ text: run.text, options: opts })
+      runs.push({ text: run.text, options: { ...run.options } })
     }
   }
   const baseColor = normColor(el.defaultColor)
@@ -228,8 +334,10 @@ async function exportText(pptx: PptxGenJS, slide: Slide, el: TextElement, pres: 
       rotate: el.rotate ?? 0,
       fontSize: PT(18),
       color: baseColor,
-      lineHeight: el.lineHeight ?? 1.5,
-      valign: 'top',
+      // 行距倍数：pptxgenjs 有效选项名是 lineSpacingMultiple（spcPct），lineHeight 会被静默忽略
+      lineSpacingMultiple: el.lineHeight ?? 1.5,
+      // 垂直对齐随导入的 bodyPr anchor（默认 OOXML 顶对齐）；写死 top 会让 ctr 文本重排错位
+      valign: el.valign ?? 'top',
       // 内边距对齐编辑器渲染（px→pt），否则 PowerPoint 默认 insets 或 0 与画布不一致
       margin: PT(el.padding ?? 8),
       isTextBox: true,
@@ -278,10 +386,12 @@ export async function exportShape(pptx: PptxGenJS, slide: Slide, el: ShapeElemen
     }
   }
   const data = await elementToImage(el, slide, pres)
+  // 兜底图为画布裁剪（已含旋转视觉）：按旋转外接框定位，rotate 归零避免二次旋转
+  const b = rotatedBoundsOf(el)
   return {
     type: 'image',
     data,
-    props: { x: IN(el.x), y: IN(el.y), w: IN(el.w), h: IN(el.h), rotate: el.rotate ?? 0 },
+    props: { x: IN(b.x), y: IN(b.y), w: IN(b.w), h: IN(b.h), rotate: 0 },
   }
 }
 
@@ -383,10 +493,12 @@ async function exportChart(slide: Slide, el: ChartElement, presentation: Present
   const elements = chart.elements ?? DEFAULT_CHART_ELEMENTS
   const asImage = async (): Promise<object> => {
     const data = await elementToImage(chart, slide, presentation)
+    // 兜底图为画布裁剪（已含旋转视觉）：按旋转外接框定位，rotate 归零避免二次旋转
+    const b = rotatedBoundsOf(chart)
     return {
       type: 'image',
       data,
-      props: { x: IN(chart.x), y: IN(chart.y), w: IN(chart.w), h: IN(chart.h), rotate: chart.rotate ?? 0 },
+      props: { x: IN(b.x), y: IN(b.y), w: IN(b.w), h: IN(b.h), rotate: 0 },
     }
   }
   // 雷达图 pptxgenjs 不支持、趋势线原生图表无法表达 → 导出为图片保证所见即所得
@@ -420,10 +532,12 @@ async function exportChart(slide: Slide, el: ChartElement, presentation: Present
 
 async function exportFormula(slide: Slide, el: FormulaElement, pres: Presentation): Promise<object> {
   const data = await elementToImage(el, slide, pres)
+  // 兜底图为画布裁剪（已含旋转视觉）：按旋转外接框定位，rotate 归零避免二次旋转
+  const b = rotatedBoundsOf(el)
   return {
     type: 'image',
     data,
-    props: { x: IN(el.x), y: IN(el.y), w: IN(el.w), h: IN(el.h), rotate: el.rotate ?? 0 },
+    props: { x: IN(b.x), y: IN(b.y), w: IN(b.w), h: IN(b.h), rotate: 0 },
   }
 }
 
@@ -452,6 +566,9 @@ export async function exportPPTX(
   pptx.layout = 'EFLINK'
   pptx.author = 'eflink-pptx'
   pptx.title = docName
+  // 主题字体还原到 latin 位（ea 位由 injectThemeEaFonts 在产物 zip 中补写）
+  const fonts = presentation.theme.ooxmlFonts
+  if (fonts) pptx.theme = { headFontFace: fonts.major, bodyFontFace: fonts.minor }
 
   for (const [i, slide] of presentation.slides.entries()) {
     const s = pptx.addSlide()
@@ -526,9 +643,27 @@ export async function exportPPTX(
     onProgress?.(i + 1, presentation.slides.length)
   }
 
-  await pptx.write({ outputType: 'blob' }).then((blob) => {
-    downloadBlob(blob as Blob, `${docName || '未命名'}.pptx`)
-  })
+  const blob = await pptx.write({ outputType: 'blob' })
+  // 主题字体后处理：run 占位展开 + theme ea 注入（仅导入产物有 ooxmlFonts 时）
+  const finalBlob = fonts ? await patchThemeFonts(blob as Blob, fonts) : (blob as Blob)
+  downloadBlob(finalBlob, `${docName || '未命名'}.pptx`)
+}
+
+/** 产物 zip 后处理：+mn/+mj 占位展开为 latin/ea/cs 引用、theme1.xml 补写 a:ea。
+ * pptxgenjs 不支持 per-run 区分 latin/ea 位，也不写 fontScheme 的 ea 声明 */
+async function patchThemeFonts(blob: Blob, fonts: OoxmlFonts): Promise<Blob> {
+  const JSZip = (await import('jszip')).default
+  const zip = await JSZip.loadAsync(blob)
+  for (const path of Object.keys(zip.files)) {
+    if (!path.endsWith('.xml')) continue
+    const file = zip.file(path)
+    if (!file) continue
+    let xml = await file.async('string')
+    if (path === 'ppt/theme/theme1.xml') xml = injectThemeEaFonts(xml, fonts)
+    xml = expandThemeFontPlaceholders(xml)
+    zip.file(path, xml)
+  }
+  return zip.generateAsync({ type: 'blob' })
 }
 
 /** 导出前检查用的纯函数（供单测） */

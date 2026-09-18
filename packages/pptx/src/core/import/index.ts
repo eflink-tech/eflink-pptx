@@ -38,6 +38,11 @@ function buildOutputTheme(theme: PptxTheme | undefined): Theme {
     background: { type: 'solid', color: sc.lt1 ?? '#FFFFFF' },
     fontName: theme.minorFont,
     fontColor: sc.dk1 ?? '#333333',
+    // 保留 fontScheme 原始字体：导出还原 theme1.xml，run 与 theme 字体一致时用 +mn 引用
+    ooxmlFonts: {
+      major: theme.majorFont, majorEa: theme.majorEaFont,
+      minor: theme.minorFont, minorEa: theme.minorEaFont,
+    },
   }
 }
 

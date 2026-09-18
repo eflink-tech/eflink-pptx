@@ -131,7 +131,7 @@ describe('txBodyToHTML', () => {
     </p:txBody>`)
     const r = await txBodyToHTML(txBody, theme)
     expect(r.html).toContain('默认样式')
-    expect(r.html).toContain('font-size:21px') // 1600/100/0.75 = 21.33 → 21
+    expect(r.html).toContain('font-size:21.33px') // 1600/100/0.75 = 21.33（保留小数，避免导出往返误差）
     expect(r.html).toContain('font-family:')
     expect(r.html).toContain('阿里巴巴普惠体')
   })
@@ -145,7 +145,7 @@ describe('txBodyToHTML', () => {
       <a:p><a:r><a:rPr sz="3200"><a:solidFill><a:srgbClr val="00FF00"/></a:solidFill></a:rPr><a:t>覆盖</a:t></a:r></a:p>
     </p:txBody>`)
     const r = await txBodyToHTML(txBody, theme)
-    expect(r.html).toContain('font-size:43px') // 3200/100/0.75 = 42.67 → 43
+    expect(r.html).toContain('font-size:42.67px') // 3200/100/0.75 = 42.67（保留小数）
     expect(r.html).toContain('color:#00FF00')
     expect(r.html).not.toContain('color:#FF0000')
   })
@@ -160,7 +160,7 @@ describe('txBodyToHTML', () => {
       <a:p><a:pPr lvl="1"/><a:r><a:t>二级</a:t></a:r></a:p>
     </p:txBody>`)
     const r = await txBodyToHTML(txBody, theme)
-    expect(r.html).toContain('font-size:37px') // 2800/100/0.75 = 37.33 → 37
+    expect(r.html).toContain('font-size:37.33px') // 2800/100/0.75 = 37.33（保留小数）
   })
 
   it('超链接 External：白名单协议产出 <a href>', async () => {
@@ -210,7 +210,7 @@ describe('txBodyToHTML 字距与行距', () => {
       <a:p><a:pPr><a:lnSpc><a:spcPts val="2000"/></a:lnSpc></a:pPr><a:r><a:rPr lang="zh-CN"/><a:t>x</a:t></a:r></a:p>
     </p:txBody>`)
     const r = await txBodyToHTML(txBody, theme)
-    expect(r.html).toContain('line-height:27px') // 2000/100/0.75 = 26.67 → 四舍五入 27
+    expect(r.html).toContain('line-height:26.67px') // 2000/100/0.75 = 26.67（保留小数，避免导出往返误差）.67 → 四舍五入 27
   })
 
   it('bullet 段落 + lnSpc → li 携带 line-height', async () => {
@@ -231,6 +231,30 @@ describe('txBodyToHTML 字距与行距', () => {
     </p:txBody>`)
     const r = await txBodyToHTML(txBody, theme)
     expect(r.html).not.toContain('line-height')
+  })
+
+  it('bodyPr anchor → 垂直对齐（ctr/b/t，未声明为 null）', async () => {
+    const mk = (anchor: string) => el(`<p:txBody xmlns:p="urn:p" xmlns:a="urn:a">
+      <a:bodyPr${anchor}/>
+      <a:p><a:r><a:t>字</a:t></a:r></a:p>
+    </p:txBody>`)
+    expect((await txBodyToHTML(mk(' anchor="ctr"'), theme)).anchor).toBe('ctr')
+    expect((await txBodyToHTML(mk(' anchor="b"'), theme)).anchor).toBe('b')
+    expect((await txBodyToHTML(mk(' anchor="t"'), theme)).anchor).toBe('t')
+    expect((await txBodyToHTML(mk(''), theme)).anchor).toBeNull()
+  })
+
+  it('空心字（noFill + a:ln 描边）→ 用描边色近似为文字色', async () => {
+    // 设计稿常用空心描边字（如目录页 Catalogue）：编辑器不支持文字描边，取描边色保证不丢色
+    const txBody = el(`<p:txBody xmlns:p="urn:p" xmlns:a="urn:a">
+      <a:bodyPr/>
+      <a:p><a:r>
+        <a:rPr sz="4400"><a:ln w="6350"><a:solidFill><a:schemeClr val="accent1"/></a:solidFill></a:ln><a:noFill/></a:rPr>
+        <a:t>Catalogue</a:t>
+      </a:r></a:p>
+    </p:txBody>`)
+    const r = await txBodyToHTML(txBody, theme)
+    expect(r.html).toContain('color:#4472C4')
   })
 })
 

@@ -56,6 +56,19 @@ describe('parsePictureEl', () => {
     expect(result.clip).toEqual({ x: 0.1, y: 0.2, w: 0.8, h: 0.6 })
   })
 
+  it('图片：xfrm rot → rotate（1/60000 deg）', async () => {
+    const pkg = await makePkg()
+    const xml = `<p:pic xmlns:p="urn:p" xmlns:a="urn:a" xmlns:r="urn:r">
+      <p:nvPicPr><p:cNvPr id="2" name="Img"/></p:nvPicPr>
+      <p:blipFill><a:blip r:embed="rId1"/></p:blipFill>
+      <p:spPr><a:xfrm rot="19829678"><a:off x="0" y="0"/><a:ext cx="952500" cy="952500"/></a:xfrm></p:spPr>
+    </p:pic>`
+    const result = await parsePictureEl(el(xml), ctxBase(pkg), IDENTITY_XFORM, pkg)
+    if (result?.type !== 'image') throw new Error('expected image')
+    // 19829678/60000 ≈ 330.49°，取整为 330
+    expect(result.rotate).toBe(330)
+  })
+
   it('视频：videoFile → video 元素，blip 作海报帧', async () => {
     const pkg = await makePkg()
     const xml = `<p:pic xmlns:p="urn:p" xmlns:a="urn:a" xmlns:r="urn:r">

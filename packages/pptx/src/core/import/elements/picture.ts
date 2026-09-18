@@ -64,6 +64,8 @@ export async function parsePictureEl(
 
   const spPr = firstDescendant(node, 'p:spPr') ?? firstDescendant(node, 'a:spPr')
   const xfrm = firstDescendant(node, 'a:xfrm')
+  // 旋转：xfrm rot（1/60000 deg）+ 组合变换 rot，与 shape.ts 同模式
+  const rot = (xfrm ? parseInt(attr(xfrm, 'rot') ?? '0', 10) : 0) / 60000 + (xf.rot ? xf.rot / 60000 : 0)
   const ln = spPr ? directChild(spPr, 'a:ln') : null
   const image: ImageElement = {
     id: genId('i-'), type: 'image', src: poster, ...geom,
@@ -71,6 +73,7 @@ export async function parsePictureEl(
     flipH: attr(xfrm, 'flipH') === '1' || undefined,
     flipV: attr(xfrm, 'flipV') === '1' || undefined,
   }
+  if (rot) image.rotate = Math.round(rot)
   const clip = parseSrcRect(blipFill ? directChild(blipFill, 'a:srcRect') : null)
   if (clip) image.clip = clip
   const shadow = parseShadow(spPr ? directChild(spPr, 'a:effectLst') : null, ctx)

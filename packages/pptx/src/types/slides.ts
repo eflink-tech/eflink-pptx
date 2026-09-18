@@ -113,6 +113,8 @@ export interface TextElement extends ElementBase {
   autoFit?: boolean
   /** 内边距（px） */
   padding?: number
+  /** 垂直对齐（源 bodyPr@anchor；缺省顶对齐） */
+  valign?: 'top' | 'middle' | 'bottom'
   outline?: { color: string; width: number; style: string }
   fill?: string
 }
@@ -367,6 +369,14 @@ export interface Slide {
   section?: string
 }
 
+/** OOXML theme fontScheme 原始字体（导入时保留，导出还原 theme1.xml 供 +mn 引用解析） */
+export interface OoxmlFonts {
+  major: string
+  majorEa?: string
+  minor: string
+  minorEa?: string
+}
+
 export interface Theme {
   /** 主题色板（图表/默认取色用） */
   colors: string[]
@@ -374,6 +384,8 @@ export interface Theme {
   background: Background
   fontName: string
   fontColor: string
+  /** 导入文件的主题字体；新建演示无此值，导出走 pptxgenjs 默认 theme */
+  ooxmlFonts?: OoxmlFonts
 }
 
 export interface Presentation {

@@ -4,7 +4,9 @@ import { memo } from 'react'
 import type { Background, Slide } from '../../types/slides'
 import { ElementRenderer } from './ElementRenderer'
 
-function backgroundStyle(bg: Background | undefined): React.CSSProperties {
+function backgroundStyle(bg: Background | undefined, transparent = false): React.CSSProperties {
+  // transparent：离屏元素兜底渲染用——白底裁剪图内嵌回页面会盖住下层相邻元素
+  if (transparent) return {}
   if (!bg) return { background: '#fff' }
   if (bg.type === 'solid') return { background: bg.color ?? '#fff' }
   if (bg.type === 'gradient' && bg.gradient) {
@@ -33,6 +35,8 @@ interface Props {
   height: number
   /** 静态模式（缩略图/放映）：隐藏交互痕迹 */
   staticMode?: boolean
+  /** 背景透明（元素兜底离屏渲染专用），覆盖默认白底 */
+  transparentBg?: boolean
   /** 正在就地编辑的元素 id（仅编辑画布） */
   editingId?: string | null
   /** 文本就地编辑内容回调 */
@@ -49,12 +53,12 @@ interface Props {
 }
 
 export const SlideRenderer = memo(function SlideRenderer({
-  slide, width, height, staticMode, editingId, onEditChange, editingCellId, onCellClick, onCellBlur, onElementDoubleClick, className,
+  slide, width, height, staticMode, transparentBg, editingId, onEditChange, editingCellId, onCellClick, onCellBlur, onElementDoubleClick, className,
 }: Props) {
   return (
     <div
       className={`relative overflow-hidden ${staticMode ? 'pointer-events-none' : ''} ${className ?? ''}`}
-      style={{ width, height, ...backgroundStyle(slide.background) }}
+      style={{ width, height, ...backgroundStyle(slide.background, transparentBg) }}
     >
       {slide.elements.map((el) => (
         <ElementRenderer
