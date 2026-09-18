@@ -41,20 +41,20 @@ function buildOutputTheme(theme: PptxTheme | undefined): Theme {
   }
 }
 
-/** 解析 pptx → Presentation + 兼容性报告 */
-export async function importPPTXDetailed(file: File): Promise<ImportResult> {
-  const pkg = await PptxPackage.load(file)
+/** 页面路径与源画布尺寸：sldIdLst → rels；缺失时按 slideN.xml 编号兜底。
+ * 导入与预览两条链路共享此入口，保证页面顺序/尺寸/兜底口径一致。 */
+export async function listSlidePaths(
+  pkg: PptxPackage,
+): Promise<{ paths: string[]; srcW: number; srcH: number; ratio: number }> {
   const presXml = await pkg.text('ppt/presentation.xml')
   if (!presXml) throw new Error('不是有效的 PPTX 文件（缺少 presentation.xml）')
-  const presDoc = parseXML(presXml)
-  const root = presDoc.documentElement
+  const root = parseXML(presXml).documentElement
 
   // 幻灯片尺寸（EMU）→ 1280 宽目标画布的缩放系数
   const sldSz = firstDescendant(root, 'p:sldSz')
   const srcW = parseInt(attr(sldSz, 'cx') ?? '12192000', 10)
   const srcH = parseInt(attr(sldSz, 'cy') ?? '6858000', 10)
   const ratio = srcW / srcH || 16 / 9
-  const scale = { x: 1280 / (srcW / 9525), y: (1280 / ratio) / (srcH / 9525) }
 
   // 页面顺序：sldIdLst → rels；缺失时按 slideN.xml 编号兜底
   const sldIdLst = firstDescendant(root, 'p:sldIdLst')
@@ -71,6 +71,14 @@ export async function importPPTXDetailed(file: File): Promise<ImportResult> {
         .filter((p) => /^ppt\/slides\/slide\d+\.xml$/.test(p))
         .sort((a, b) => (parseInt(a.match(/(\d+)/)?.[1] ?? '0', 10) - parseInt(b.match(/(\d+)/)?.[1] ?? '0', 10)))
   if (!paths.length) throw new Error('PPTX 中没有幻灯片')
+  return { paths, srcW, srcH, ratio }
+}
+
+/** 解析 pptx → Presentation + 兼容性报告 */
+export async function importPPTXDetailed(file: File): Promise<ImportResult> {
+  const pkg = await PptxPackage.load(file)
+  const { paths, srcW, srcH, ratio } = await listSlidePaths(pkg)
+  const scale = { x: 1280 / (srcW / 9525), y: (1280 / ratio) / (srcH / 9525) }
 
   const report: ImportReport = { skipped: {} }
   const slides: Slide[] = []
