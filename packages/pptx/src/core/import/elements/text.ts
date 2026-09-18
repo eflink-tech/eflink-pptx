@@ -100,13 +100,15 @@ export async function txBodyToHTML(
     const algn = attr(pPr, 'algn')
     const align = algn === 'ctr' ? 'center' : algn === 'r' ? 'right' : algn === 'just' ? 'justify' : 'left'
     const inner = await paragraphToInner(p, theme, pkg, partPath)
-    // 行距：spcPct（1/100000 → 倍数）优先，spcPts（1/100 pt → px）覆盖
+    // 行距：spcPct（1/100000 → 倍数）优先，spcPts（1/100 pt → px）覆盖；val 非法/非正数时跳过，避免产出 line-height:0 压扁文字
     const lnSpc = pPr ? directChild(pPr, 'a:lnSpc') : null
     let spacing = ''
     const pct = lnSpc ? firstDescendant(lnSpc, 'a:spcPct') : null
-    if (pct) spacing = `line-height:${(parseInt(attr(pct, 'val') ?? '100000', 10)) / 100000}`
+    const pctVal = pct ? parseInt(attr(pct, 'val') ?? '', 10) : NaN
+    if (Number.isFinite(pctVal) && pctVal > 0) spacing = `line-height:${pctVal / 100000}`
     const pts = lnSpc ? firstDescendant(lnSpc, 'a:spcPts') : null
-    if (pts) spacing = `line-height:${Math.round(parseInt(attr(pts, 'val') ?? '0', 10) / 100 / 0.75)}px`
+    const ptsVal = pts ? parseInt(attr(pts, 'val') ?? '', 10) : NaN
+    if (Number.isFinite(ptsVal) && ptsVal > 0) spacing = `line-height:${Math.round(ptsVal / 100 / 0.75)}px`
     paras.push({ align, kind: bulletKind(p), inner, spacing })
   }
 

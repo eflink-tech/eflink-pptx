@@ -121,6 +121,26 @@ describe('txBodyToHTML 字距与行距', () => {
     const r = await txBodyToHTML(txBody, theme)
     expect(r.html).toContain('line-height:27px') // 2000/100/0.75 = 26.67 → 四舍五入 27
   })
+
+  it('bullet 段落 + lnSpc → li 携带 line-height', async () => {
+    const txBody = el(`<p:txBody xmlns:p="urn:p" xmlns:a="urn:a">
+      <a:bodyPr/>
+      <a:p><a:pPr><a:lnSpc><a:spcPct val="200000"/></a:lnSpc><a:buChar char="•"/></a:pPr><a:r><a:rPr lang="zh-CN"/><a:t>项</a:t></a:r></a:p>
+    </p:txBody>`)
+    const r = await txBodyToHTML(txBody, theme)
+    expect(r.html).toContain('<ul>')
+    expect(r.html).toContain('<li style="text-align:left;line-height:2">')
+  })
+
+  it('lnSpc val 非法/非正数时跳过，不产出 line-height', async () => {
+    const txBody = el(`<p:txBody xmlns:p="urn:p" xmlns:a="urn:a">
+      <a:bodyPr/>
+      <a:p><a:pPr><a:lnSpc><a:spcPct val="abc"/></a:lnSpc></a:pPr><a:r><a:t>一</a:t></a:r></a:p>
+      <a:p><a:pPr><a:lnSpc><a:spcPts val="-500"/></a:lnSpc></a:pPr><a:r><a:t>二</a:t></a:r></a:p>
+    </p:txBody>`)
+    const r = await txBodyToHTML(txBody, theme)
+    expect(r.html).not.toContain('line-height')
+  })
 })
 
 /** 构造含 slide1.xml 与 External 超链接 rels 的真实包 */
