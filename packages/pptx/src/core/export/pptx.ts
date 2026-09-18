@@ -197,12 +197,14 @@ async function exportText(pptx: PptxGenJS, slide: Slide, el: TextElement, pres: 
   }
 }
 
-async function exportShape(pptx: PptxGenJS, slide: Slide, el: ShapeElement, pres: Presentation): Promise<object> {
+/** 导出形状（export 仅为测试暴露：path 形状走图片兜底是回归关键点） */
+export async function exportShape(pptx: PptxGenJS, slide: Slide, el: ShapeElement, pres: Presentation): Promise<object> {
   void pptx
   const nativeKey = SHAPE_MAP[el.shapeKey]
   const fill = typeof el.fill === 'string' ? normColor(el.fill) : undefined
   const isGradient = typeof el.fill === 'object' && el.fill !== null
-  if (nativeKey && !isGradient) {
+  // 自定义 path（custGeom 导入产出）无法用原生预设表达：走离屏截图兜底，避免静默退化为矩形
+  if (nativeKey && !isGradient && !el.path) {
     return {
       type: 'shape',
       native: nativeKey,

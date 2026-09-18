@@ -1,6 +1,12 @@
-import { describe, expect, it } from 'vitest'
-import { chartNativeSpec, normColor, parseRunsFromHTML, pxToInch as IN, pxToPt as PT } from './pptx'
-import type { ChartType } from '../../types/slides'
+import { describe, expect, it, vi } from 'vitest'
+import { chartNativeSpec, normColor, parseRunsFromHTML, pxToInch as IN, pxToPt as PT, exportShape } from './pptx'
+import type { ChartType, Presentation, ShapeElement, Slide } from '../../types/slides'
+import { createDefaultTheme } from '../../types/slides'
+
+// 离屏渲染依赖浏览器 canvas，测试中 mock 掉，仅验证分支走向
+vi.mock('./image', () => ({
+  renderSlideToBlob: vi.fn(async () => new Blob(['fake-png'])),
+}))
 
 describe('chartNativeSpec 图表导出映射', () => {
   it('柱状/条形图方向与堆积方式', () => {
@@ -96,5 +102,32 @@ describe('parseRunsFromHTML', () => {
   it('空内容兜底', () => {
     const result = parseRunsFromHTML('')
     expect(result).toHaveLength(1)
+  })
+})
+
+describe('exportShape 自定义 path 分支', () => {
+  const slide: Slide = { id: 's1', elements: [] }
+  const pres: Presentation = {
+    slides: [slide], theme: createDefaultTheme(), width: 1280, viewportRatio: 16 / 9,
+  }
+  // pptx 实例在 exportShape 中被显式 void，测试传空对象即可
+  const dummyPptx = {} as Parameters<typeof exportShape>[0]
+
+  it('path 形状不走原生分支，落图片兜底（避免 custGeom 静默退化矩形）', async () => {
+    const el: ShapeElement = {
+      id: 'a', type: 'shape', x: 0, y: 0, w: 100, h: 100,
+      shapeKey: 'rect', path: 'M0,0 L100,100', fill: '#FF0000',
+    }
+    const spec = await exportShape(dummyPptx, slide, el, pres)
+    expect(spec).toMatchObject({ type: 'image' })
+  })
+
+  it('普通预设形状仍走原生分支', async () => {
+    const el: ShapeElement = {
+      id: 'b', type: 'shape', x: 0, y: 0, w: 100, h: 100,
+      shapeKey: 'rect', fill: '#FF0000',
+    }
+    const spec = await exportShape(dummyPptx, slide, el, pres)
+    expect(spec).toMatchObject({ type: 'shape', native: 'rect' })
   })
 })
