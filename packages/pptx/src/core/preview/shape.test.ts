@@ -65,7 +65,7 @@ describe('preview/renderShape', () => {
     expect(Number(drop.getAttribute('dy'))).toBeCloseTo((38100 / 9525) * Math.sin(Math.PI / 4), 3)
   })
 
-  it('noFill → fill:none；rot/flip 上到 g 的 transform', async () => {
+  it('noFill → fill:none；rot 上到 g、flip 移到嵌套 svg（文本不随 flip 镜像）', async () => {
     const ctx = makeCtx()
     const sp = wrap(`<p:sp><p:spPr>
       <a:xfrm rot="1800000" flipH="1"><a:off x="0" y="0"/><a:ext cx="952500" cy="952500"/></a:xfrm>
@@ -74,10 +74,25 @@ describe('preview/renderShape', () => {
     </p:spPr></p:sp>`)
     const g = (await renderShape(sp, ctx))!
     expect(g.querySelector('path')!.getAttribute('fill')).toBe('none')
-    const tf = g.getAttribute('transform')!
-    // 精确断言完整 transform 串（boxTransform({x:0,y:0,w:100,h:100,rot:30,flipH:true})），
-    // 确保顺序锁定：rotate 在 flip 前（OOXML 先翻转后旋转，p' = R·F·p）
-    expect(tf).toBe('rotate(30,50,50) translate(100,0) scale(-1,1) translate(0,0)')
+    // 外层 g 只保留 rotate（PowerPoint 翻转形状不镜像文字，flip 不能放在含 foreignObject 的外层 g 上）
+    expect(g.getAttribute('transform')).toBe('rotate(30,50,50)')
+    // flip 移到嵌套 svg：boxTransform({rot:0, flipH:true, x:0,y:0,w:100,h:100})，rotate 先于 flip（p' = R·F·p）由先 rot 后 flip 的结构保证
+    expect(g.querySelector('svg')!.getAttribute('transform')).toBe('translate(100,0) scale(-1,1) translate(0,0)')
+  })
+
+  it('flipH + txBody：外层 g 不含 scale(-1,1)，嵌套 svg 含；foreignObject 直挂 g 不镜像', async () => {
+    const ctx = makeCtx()
+    const sp = wrap(`<p:sp><p:txBody><a:bodyPr/><a:p><a:r><a:t>文字</a:t></a:r></a:p></p:txBody><p:spPr>
+      <a:xfrm flipH="1"><a:off x="0" y="0"/><a:ext cx="952500" cy="952500"/></a:xfrm>
+      <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+      <a:noFill/>
+    </p:spPr></p:sp>`)
+    const g = (await renderShape(sp, ctx))!
+    expect(g.getAttribute('transform') ?? '').not.toContain('scale(-1,1)') // 无 rot 时 g 甚至无 transform 属性
+    const nested = g.querySelector('svg')!
+    expect(nested.getAttribute('transform')!).toContain('scale(-1,1)')
+    const fo = g.querySelector('foreignObject')!
+    expect((fo.firstElementChild as HTMLElement).innerHTML).toContain('文字')
   })
 
   it('p:cxnSp → line + 箭头 marker', () => {

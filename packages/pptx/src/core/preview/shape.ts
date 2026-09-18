@@ -131,7 +131,8 @@ export async function renderShape(node: Element, ctx: PreviewCtx): Promise<SVGEl
   const spPr = firstDescendant(node, 'a:spPr') ?? firstDescendant(node, 'p:spPr')
   const custGeom = spPr ? directChild(spPr, 'a:custGeom') : null
 
-  const g = svgEl('g', { transform: boxTransform(box) })
+  // 外层 g 只保留 rot：PowerPoint 翻转形状不镜像文字，flip 若在外层 g 上会把 foreignObject 文本一起镜像
+  const g = svgEl('g', { transform: boxTransform({ ...box, flipH: false, flipV: false }) })
   // 路径：custGeomToPath 产出 0-100 视口空间（w/h 传 px 值，内部 ×9525 还原 EMU 归一化）；
   // 预设形状库同为 0-100（未知 key 回退 rect）
   const meta = custGeom ? null : getShapePath(prst ? getShapeKey(prst) : 'rect')
@@ -142,8 +143,10 @@ export async function renderShape(node: Element, ctx: PreviewCtx): Promise<SVGEl
     const solidFill = spPr ? directChild(spPr, 'a:solidFill') : null
     const ln = spPr ? directChild(spPr, 'a:ln') : null
     const effectLst = spPr ? directChild(spPr, 'a:effectLst') : null
+    // flip 移到嵌套 svg 上（无 flip 时 boxTransform 返回 undefined，属性跳过）
     const nested = svgEl('svg', {
       x: box.x, y: box.y, width: box.w, height: box.h,
+      transform: boxTransform({ ...box, rot: 0 }),
       viewBox: '0 0 100 100', preserveAspectRatio: 'none', overflow: 'visible',
     })
     nested.appendChild(svgEl('path', {
