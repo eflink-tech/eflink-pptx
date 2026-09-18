@@ -66,18 +66,18 @@ export function resolveColorOf(clrEl: Element, theme: PptxTheme): string | undef
   else if (name === 'a:schemeClr') hex = resolveSchemeColor(clrEl.getAttribute('val') ?? 'tx1', theme)
   else if (name === 'a:prstClr') hex = `#${(clrEl.getAttribute('lastClr') ?? '000000').toUpperCase()}`
   else return undefined
-  if (!hex || hex.length !== 7) return undefined
+  if (!hex) return undefined
+  // 非法 hex（如 'GGHHII'）直接判无效，避免 NaN 传播
+  if (!/^#[0-9A-Fa-f]{6}$/.test(hex)) return undefined
 
   let [r, g, b] = hexToRgb(hex)
+  let alpha: number | null = null
   let mod = 1
   let off = 0
   for (const modEl of Array.from(clrEl.children)) {
     const val = parseInt(modEl.getAttribute('val') ?? '0', 10) / 100000
     switch (modEl.nodeName) {
-      case 'a:alpha': {
-        const a = Math.round(val * BYTE).toString(16).padStart(2, '0')
-        return rgbToHex(r, g, b) + a
-      }
+      case 'a:alpha': alpha = val; break
       case 'a:lumMod': mod = val; break
       case 'a:lumOff': off = val; break
       case 'a:shade': r *= val; g *= val; b *= val; break
@@ -85,8 +85,12 @@ export function resolveColorOf(clrEl: Element, theme: PptxTheme): string | undef
       default: break
     }
   }
+  // 修饰符文档顺序不保证：先应用亮度变换，最后拼接 alpha
   if (mod !== 1 || off !== 0) [r, g, b] = applyLum(r, g, b, mod, off)
-  return rgbToHex(r, g, b)
+  const rgb = rgbToHex(r, g, b)
+  if (alpha === null) return rgb
+  const a = Math.round(alpha * BYTE).toString(16).padStart(2, '0').toUpperCase()
+  return rgb + a
 }
 
 /** 容器节点（a:solidFill / a:ln / a:bgPr 等）取第一个颜色子节点求值 */

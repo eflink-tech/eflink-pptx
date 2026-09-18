@@ -47,4 +47,17 @@ describe('PptxPackage', () => {
     expect(resolveTarget('ppt/slides', '../media/a.png')).toBe('ppt/media/a.png')
     expect(resolveTarget('ppt', '/ppt/media/a.png')).toBe('ppt/media/a.png')
   })
+
+  it('根部件 rels：按 _rels/<name>.rels 解析并记录关系 Type', async () => {
+    const zip = new JSZip()
+    zip.file('presentation.xml', '<p:presentation/>')
+    zip.file('_rels/presentation.xml.rels', `<?xml version="1.0"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="slideMasters/slideMaster1.xml"/>
+</Relationships>`)
+    const pkg = await PptxPackage.load(await zip.generateAsync({ type: 'blob' }))
+    const rels = await pkg.rels('presentation.xml')
+    expect(rels.get('rId1')?.target).toBe('slideMasters/slideMaster1.xml')
+    expect(rels.get('rId1')?.type).toBe('http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster')
+  })
 })

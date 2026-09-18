@@ -30,12 +30,12 @@ export interface GroupXform {
   rot: number
 }
 
-export const IDENTITY_XFORM: GroupXform = { ox: 0, oy: 0, sx: 1, sy: 1, rot: 0 }
+export const IDENTITY_XFORM: Readonly<GroupXform> = Object.freeze({ ox: 0, oy: 0, sx: 1, sy: 1, rot: 0 })
 
-export function mapX(t: GroupXform, v: number): number {
+export function mapX(t: Readonly<GroupXform>, v: number): number {
   return t.ox + v * t.sx
 }
 
-export function mapY(t: GroupXform, v: number): number {
+export function mapY(t: Readonly<GroupXform>, v: number): number {
   return t.oy + v * t.sy
 }

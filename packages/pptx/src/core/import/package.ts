@@ -6,6 +6,8 @@ import { parseXML } from './xml'
 export interface PartRel {
   /** 包内绝对路径（External 关系为原始目标） */
   target: string
+  /** 关系 Type URI（如 .../relationships/image） */
+  type?: string
   mode?: string
 }
 
@@ -45,17 +47,20 @@ export class PptxPackage {
     return (await this.zip.file(path)?.async('text')) ?? null
   }
 
-  /** 部件的 rels：'ppt/slides/slide1.xml' → 解析 'ppt/slides/_rels/slide1.xml.rels'，target 已解析为包内绝对路径 */
+  /** 部件的 rels：'ppt/slides/slide1.xml' → 解析 'ppt/slides/_rels/slide1.xml.rels'，target 已解析为包内绝对路径。
+   * 根部件（无 '/'）按约定解析 '_rels/<name>.rels'。
+   * 返回值不得修改（内部缓存引用）。 */
   async rels(partPath: string): Promise<Map<string, PartRel>> {
     const cached = this.relsCache.get(partPath)
     if (cached) return cached
     const map = new Map<string, PartRel>()
     const idx = partPath.lastIndexOf('/')
-    const relPath = `${partPath.slice(0, idx)}/_rels/${partPath.slice(idx + 1)}.rels`
+    const baseDir = idx >= 0 ? partPath.slice(0, idx) : ''
+    const name = idx >= 0 ? partPath.slice(idx + 1) : partPath
+    const relPath = idx >= 0 ? `${baseDir}/_rels/${name}.rels` : `_rels/${name}.rels`
     const xml = await this.text(relPath)
     if (xml) {
       const doc = parseXML(xml)
-      const baseDir = partPath.slice(0, idx)
       for (const rel of Array.from(doc.getElementsByTagName('Relationship'))) {
         const id = rel.getAttribute('Id')
         const target = rel.getAttribute('Target')
@@ -63,6 +68,7 @@ export class PptxPackage {
         const mode = rel.getAttribute('TargetMode') ?? undefined
         map.set(id, {
           target: mode === 'External' ? target : resolveTarget(baseDir, target),
+          type: rel.getAttribute('Type') ?? undefined,
           mode,
         })
       }

@@ -20,6 +20,9 @@ export const DEFAULT_SCHEME: Record<string, string> = {
 
 const CLR_MAP_KEYS = ['bg1', 'tx1', 'bg2', 'tx2', 'accent1', 'accent2', 'accent3', 'accent4', 'accent5', 'accent6', 'hlink', 'folHlink']
 
+/** OOXML theme 关系 Type URI */
+const THEME_REL_TYPE = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme'
+
 function readClrNode(clr: Element | null): string | undefined {
   if (!clr) return undefined
   const srgb = firstDescendant(clr, 'a:srgbClr')
@@ -58,7 +61,7 @@ export async function parseThemeForMaster(pkg: PptxPackage, masterPath: string |
     const rels = await pkg.rels(masterPath)
     let themePath: string | null = null
     for (const rel of rels.values()) {
-      if (rel.mode !== 'External' && rel.target.includes('/theme/')) {
+      if (rel.mode !== 'External' && rel.type === THEME_REL_TYPE) {
         themePath = rel.target
         break
       }
