@@ -3,6 +3,7 @@ import { attr, directChild, directChildren, firstDescendant } from '../xml'
 import { resolveColor } from '../styles'
 import { custGeomToPath, getShapeKey } from '../geometry'
 import { txBodyToHTML } from './text'
+import { fontStackOf } from '../fonts'
 import { genId } from '../../utils/id'
 import { mapX, mapY, addSkipped } from '../context'
 import type { GroupXform, ParseContext } from '../context'
@@ -187,6 +188,10 @@ export async function parseShapeEl(
       shape.defaultColor = resolveColor(rPr ? directChild(rPr, 'a:solidFill') : null, ctx.theme) ?? '#FFFFFF'
       const sz = rPr ? attr(rPr, 'sz') : null
       if (sz) shape.fontSize = Math.round(parseInt(sz, 10) / 100 / 0.75)
+      // 首 run 字体栈（latin + ea，含 +mj/+mn 主题引用解析）
+      const latin = attr(rPr ? directChild(rPr, 'a:latin') : null, 'typeface')
+      const ea = attr(rPr ? directChild(rPr, 'a:ea') : null, 'typeface')
+      if (latin || ea) shape.defaultFontName = fontStackOf(latin, ea, ctx.theme)
       const firstP = firstDescendant(txBody, 'a:p')
       shape.align = alignFromAlgn(firstP ? attr(directChild(firstP, 'a:pPr'), 'algn') : null)
       const bodyPr = directChild(txBody, 'a:bodyPr')

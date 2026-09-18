@@ -1,6 +1,7 @@
-/** txBody → 富文本 HTML（项目符号/编号、超链接、autofit、竖排） */
+/** txBody → 富文本 HTML（项目符号/编号、超链接、autofit、竖排、字体栈） */
 import { attr, directChild, directChildren, firstDescendant } from '../xml'
 import { resolveColor } from '../styles'
+import { fontStackOf } from '../fonts'
 import type { PptxTheme } from '../theme'
 import type { PptxPackage } from '../package'
 
@@ -59,10 +60,10 @@ async function paragraphToInner(p: Element, theme: PptxTheme, pkg: PptxPackage |
       }
       const color = resolveColor(directChild(rPr, 'a:solidFill'), theme)
       if (color) styles.push(`color:${color}`)
-      const latin = directChild(rPr, 'a:latin')
-      const typeface = attr(latin, 'typeface')
-      // typeface 来自不可信文件属性，转义防止逃逸 style 属性注入
-      if (typeface && !typeface.startsWith('+')) styles.push(`font-family:${escapeHTML(typeface)}`)
+      // 字体栈：latin + ea（含 +mj/+mn 主题引用），中文回退栈兜底；字体名来自不可信属性，fontStackOf 内已剔除引号防注入
+      const latin = attr(directChild(rPr, 'a:latin'), 'typeface')
+      const ea = attr(directChild(rPr, 'a:ea'), 'typeface')
+      if (latin || ea) styles.push(`font-family:${fontStackOf(latin, ea, theme)}`)
     }
     const styleAttr = styles.length ? ` style="${styles.join(';')}"` : ''
     let run = `<span${styleAttr}>${escapeHTML(text)}</span>`

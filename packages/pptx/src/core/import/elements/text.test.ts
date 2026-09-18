@@ -68,9 +68,28 @@ describe('txBodyToHTML', () => {
       <a:p><a:r><a:rPr><a:latin typeface="x&quot; onmouseover=&quot;alert(1)"/></a:rPr><a:t>恶意</a:t></a:r></a:p>
     </p:txBody>`)
     const r = await txBodyToHTML(txBody, theme)
-    // 引号必须转义为 &quot;，不允许出现未转义的属性逃逸
-    expect(r.html).toContain('&quot;')
+    // 字体名剔除引号/分号（fontStackOf），不允许出现未转义的属性逃逸
+    expect(r.html).not.toContain('" onmouseover')
     expect(r.html).not.toMatch(/onmouseover="/)
+  })
+
+  it('run 的 a:latin + a:ea → 完整字体栈（latin、ea、中文回退）', async () => {
+    const txBody = el(`<p:txBody xmlns:p="urn:p" xmlns:a="urn:a">
+      <a:bodyPr/>
+      <a:p><a:r><a:rPr><a:latin typeface="Arial"/><a:ea typeface="微软雅黑"/></a:rPr><a:t>字体</a:t></a:r></a:p>
+    </p:txBody>`)
+    const r = await txBodyToHTML(txBody, theme)
+    expect(r.html).toContain(`font-family:'Arial', '微软雅黑', 'PingFang SC', 'Microsoft YaHei', sans-serif`)
+  })
+
+  it('主题字体引用 +mn-lt / +mn-ea 解析为主题字体', async () => {
+    const themeEa: PptxTheme = { ...theme, minorEaFont: '汉仪雅酷黑' }
+    const txBody = el(`<p:txBody xmlns:p="urn:p" xmlns:a="urn:a">
+      <a:bodyPr/>
+      <a:p><a:r><a:rPr><a:latin typeface="+mn-lt"/><a:ea typeface="+mn-ea"/></a:rPr><a:t>正文</a:t></a:r></a:p>
+    </p:txBody>`)
+    const r = await txBodyToHTML(txBody, themeEa)
+    expect(r.html).toContain(`font-family:'Calibri', '汉仪雅酷黑', 'PingFang SC', 'Microsoft YaHei', sans-serif`)
   })
 
   it('超链接 External：白名单协议产出 <a href>', async () => {

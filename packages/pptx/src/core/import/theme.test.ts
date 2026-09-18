@@ -65,4 +65,34 @@ describe('parseThemeForMaster', () => {
     const theme = await parseThemeForMaster(pkg, 'ppt/slideMasters/slideMaster1.xml')
     expect(theme.schemeColors.accent1).toBe('#4472C4')
   })
+
+  it('解析 fontScheme 的 a:ea 东亚字体；缺失时为 undefined', async () => {
+    const zip = new JSZip()
+    zip.file('ppt/slideMasters/slideMaster1.xml', `<p:sldMaster xmlns:p="urn:p" xmlns:a="urn:a"/>`)
+    zip.file('ppt/slideMasters/_rels/slideMaster1.xml.rels', `<?xml version="1.0"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="../theme/theme1.xml"/>
+</Relationships>`)
+    zip.file('ppt/theme/theme1.xml', `<?xml version="1.0"?>
+<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <a:themeElements>
+    <a:fontScheme name="Office">
+      <a:majorFont><a:latin typeface="Calibri Light"/><a:ea typeface="汉仪长文简"/></a:majorFont>
+      <a:minorFont><a:latin typeface="Calibri"/><a:ea typeface="微软雅黑"/></a:minorFont>
+    </a:fontScheme>
+  </a:themeElements>
+</a:theme>`)
+    const pkg = await PptxPackage.load(await zip.generateAsync({ type: 'blob' }))
+    const theme = await parseThemeForMaster(pkg, 'ppt/slideMasters/slideMaster1.xml')
+    expect(theme.majorEaFont).toBe('汉仪长文简')
+    expect(theme.minorEaFont).toBe('微软雅黑')
+  })
+
+  it('fontScheme 仅 latin 无 ea 时，ea 字体为 undefined', async () => {
+    const pkg = await buildPkg()
+    const theme = await parseThemeForMaster(pkg, 'ppt/slideMasters/slideMaster1.xml')
+    expect(theme.majorFont).toBe('Calibri Light')
+    expect(theme.majorEaFont).toBeUndefined()
+    expect(theme.minorEaFont).toBeUndefined()
+  })
 })

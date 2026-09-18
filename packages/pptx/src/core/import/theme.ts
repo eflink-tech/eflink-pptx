@@ -8,6 +8,9 @@ export interface PptxTheme {
   schemeColors: Record<string, string>
   majorFont: string
   minorFont: string
+  /** 东亚字体（a:fontScheme 的 a:ea），中文模板的实际渲染字体；缺失为 undefined */
+  majorEaFont?: string
+  minorEaFont?: string
   /** 母版 p:clrMap：bg1→lt1 等；未指定的键与 key 相同 */
   colorMap: Record<string, string>
 }
@@ -32,10 +35,10 @@ function readClrNode(clr: Element | null): string | undefined {
   return undefined
 }
 
-function fontOf(fontScheme: Element | null, tag: string): string | undefined {
+function fontOf(fontScheme: Element | null, tag: string, ea: boolean): string | undefined {
   const node = fontScheme ? directChild(fontScheme, `a:${tag}`) : null
-  const latin = node ? directChild(node, 'a:latin') : null
-  const typeface = attr(latin, 'typeface')
+  const face = node ? directChild(node, ea ? 'a:ea' : 'a:latin') : null
+  const typeface = attr(face, 'typeface')
   return typeface && !typeface.startsWith('+') ? typeface : undefined
 }
 
@@ -56,6 +59,8 @@ export async function parseThemeForMaster(pkg: PptxPackage, masterPath: string |
   const schemeColors: Record<string, string> = { ...DEFAULT_SCHEME }
   let majorFont = 'Calibri'
   let minorFont = 'Calibri'
+  let majorEaFont: string | undefined
+  let minorEaFont: string | undefined
 
   if (masterPath) {
     const rels = await pkg.rels(masterPath)
@@ -79,13 +84,15 @@ export async function parseThemeForMaster(pkg: PptxPackage, masterPath: string |
           }
         }
         const fontScheme = firstDescendant(root, 'a:fontScheme')
-        majorFont = fontOf(fontScheme, 'majorFont') ?? majorFont
-        minorFont = fontOf(fontScheme, 'minorFont') ?? minorFont
+        majorFont = fontOf(fontScheme, 'majorFont', false) ?? majorFont
+        minorFont = fontOf(fontScheme, 'minorFont', false) ?? minorFont
+        majorEaFont = fontOf(fontScheme, 'majorFont', true)
+        minorEaFont = fontOf(fontScheme, 'minorFont', true)
       }
     }
   }
 
-  return { schemeColors, majorFont, minorFont, colorMap }
+  return { schemeColors, majorFont, minorFont, majorEaFont, minorEaFont, colorMap }
 }
 
 /** schemeClr 名称求值：先过母版 clrMap（bg1→lt1 等），再查主题色表 */

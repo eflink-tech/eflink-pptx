@@ -143,6 +143,30 @@ describe('parseShapeEl', () => {
     expect(result.text).not.toContain('&lt;')
   })
 
+  it('形状文本首 run 字体 → defaultFontName 完整栈（含主题引用解析）', async () => {
+    const xml = `<?xml version="1.0"?>
+<p:sld xmlns:p="urn:p" xmlns:a="urn:a"><p:cSld><p:spTree>
+  <p:sp>
+    <p:nvSpPr><p:cNvPr id="2" name="Font Box"/></p:nvSpPr>
+    <p:spPr>
+      <a:xfrm><a:off x="0" y="0"/><a:ext cx="1905000" cy="952500"/></a:xfrm>
+      <a:prstGeom prst="roundRect"><a:avLst/></a:prstGeom>
+      <a:solidFill><a:srgbClr val="00AA66"/></a:solidFill>
+    </p:spPr>
+    <p:txBody><a:bodyPr/>
+      <a:p><a:r><a:rPr lang="zh-CN" sz="1800"><a:latin typeface="+mn-lt"/><a:ea typeface="+mn-ea"/></a:rPr><a:t>输入二级标题</a:t></a:r></a:p>
+    </p:txBody>
+  </p:sp>
+</p:spTree></p:cSld></p:sld>`
+    const { pkg, ctx } = await makeCtx(xml)
+    const sp = el(xml).getElementsByTagName('p:sp')[0]
+    const result = await parseShapeEl(sp, ctx, IDENTITY_XFORM, pkg)
+    if (result?.type !== 'shape') throw new Error('expected shape')
+    expect(result.defaultFontName).toBe(`'Calibri', 'PingFang SC', 'Microsoft YaHei', sans-serif`)
+    expect(result.fontSize).toBe(24)
+    expect(result.defaultColor).toBe('#FFFFFF')
+  })
+
   it('占位符继承：无 xfrm 时从 placeholders 取位置折算 px', async () => {
     const xml = `<?xml version="1.0"?>
 <p:sld xmlns:p="urn:p" xmlns:a="urn:a"><p:cSld><p:spTree>
