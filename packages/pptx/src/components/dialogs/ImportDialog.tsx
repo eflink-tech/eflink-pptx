@@ -3,7 +3,20 @@ import { Modal } from './ModalHost'
 import { useEditorStore } from '../../store/editorStore'
 import { useUIStore, useToastStore } from '../../store/uiStore'
 import { parseJSONFile } from '../../core/export/json'
-import { importPPTX } from '../../core/import'
+import { importPPTXDetailed } from '../../core/import'
+
+/** 兼容性报告 skip 种类 → 用户可读文案 */
+const SKIP_LABELS: Record<string, string> = {
+  missingImage: '缺失图片',
+  missingChart: '缺失图表数据',
+  unknownChart: '未识别图表',
+  elementParseFailed: '无法解析的元素',
+  slideParseFailed: '无法解析的页面',
+  smartartFallback: 'SmartArt 已转图片',
+  groupParseFailed: '组合解析失败',
+  groupRotation: '组合旋转未还原',
+  missingPlaceholder: '占位符缺失',
+}
 
 export function ImportDialog() {
   const toast = useToastStore.getState().toast
@@ -19,10 +32,15 @@ export function ImportDialog() {
         toast(`已导入 JSON（${pres.slides.length} 页）`, 'success')
       } else if (file.name.toLowerCase().endsWith('.pptx')) {
         toast('正在解析 PPTX…')
-        const pres = await importPPTX(file)
+        const { presentation: pres, report } = await importPPTXDetailed(file)
         useEditorStore.getState().pushHistory()
         useEditorStore.getState().replacePresentation(pres)
-        toast(`已导入 PPTX（${pres.slides.length} 页）`, 'success')
+        const items = Object.entries(report.skipped).map(([k, v]) => `${SKIP_LABELS[k] ?? k} ×${v}`)
+        if (items.length) {
+          toast(`已导入 PPTX（${pres.slides.length} 页）；部分内容未完整还原：${items.join('、')}`, 'success')
+        } else {
+          toast(`已导入 PPTX（${pres.slides.length} 页）`, 'success')
+        }
       } else {
         toast('请选择 .pptx 或 .json 文件', 'error')
         return
