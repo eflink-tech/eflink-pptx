@@ -35,10 +35,13 @@ describe('preview/renderTable', () => {
     expect(Number(rects[0].getAttribute('height'))).toBeCloseTo(1000000 / 9525, 1)
     expect(rects[0].getAttribute('fill')).toBe('#EEEEEE')
     expect(rects[0].getAttribute('stroke')).toBe('#BFBFBF')
-    // 富文本进入 foreignObject（复用 txBodyToHTML：加粗/字号/颜色生效）
-    const fo = g.querySelector('foreignObject')!
-    expect(fo.firstElementChild!.innerHTML).toContain('表头')
-    expect(fo.firstElementChild!.innerHTML).toContain('font-weight:bold')
+    // 富文本进入 foreignObject（复用 txBodyToHTML：加粗/字号/颜色生效），3 格各一个
+    const fos = g.querySelectorAll('foreignObject')
+    expect(fos).toHaveLength(3)
+    expect(fos[0].firstElementChild!.innerHTML).toContain('表头')
+    expect(fos[0].firstElementChild!.innerHTML).toContain('font-weight:bold')
+    expect(fos[1].firstElementChild!.innerHTML).toContain('A')
+    expect(fos[2].firstElementChild!.innerHTML).toContain('B')
   })
 
   it('无 p:xfrm 时返回 null', async () => {

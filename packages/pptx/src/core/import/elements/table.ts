@@ -43,7 +43,8 @@ function cellStyleOf(tc: Element, theme: PptxTheme): TableCell['style'] {
 }
 
 /** a:tbl → cells 矩阵（合并原点带 colspan/rowspan，被并格为 null）；
- * tcEls 为对应源 a:tc 元素矩阵（预览层富文本用），与 cells 形状一致：普通格=元素，合并占位/覆盖区=null */
+ * tcEls 为对应源 a:tc 元素矩阵（预览层富文本用），与 cells 逐位同步，改动 cells 逻辑时必须同步维护：
+ * 普通格=元素，合并占位/覆盖区=null */
 export function buildCellMatrix(tbl: Element, theme: PptxTheme): {
   cells: Array<Array<TableCell | null>>
   tcEls: Array<Array<Element | null>>

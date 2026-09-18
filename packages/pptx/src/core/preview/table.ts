@@ -3,7 +3,7 @@
 import { attr, directChildren, firstDescendant } from '../import/xml'
 import { buildCellMatrix } from '../import/elements/table'
 import { renderText } from './text'
-import { svgEl, geomOf, type PreviewCtx } from './svg'
+import { svgEl, geomOf, boxTransform, type PreviewCtx } from './svg'
 
 export async function renderTable(node: Element, ctx: PreviewCtx): Promise<SVGElement | null> {
   const box = geomOf(node, ctx)
@@ -33,7 +33,8 @@ export async function renderTable(node: Element, ctx: PreviewCtx): Promise<SVGEl
   }
 
   const { cells, tcEls } = buildCellMatrix(tbl, ctx.theme)
-  const g = svgEl('g')
+  // 保留 frame 旋转；flip 对表格丢弃而非镜像（与 shape.ts 同理，表格翻转语义罕见且镜像文本不可读）
+  const g = svgEl('g', { transform: boxTransform({ ...box, flipH: false, flipV: false }) })
   for (let r = 0; r < cells.length; r += 1) {
     for (let c = 0; c < cells[r].length; c += 1) {
       const cell = cells[r][c]
@@ -42,7 +43,7 @@ export async function renderTable(node: Element, ctx: PreviewCtx): Promise<SVGEl
       const rowspan = cell.rowspan ?? 1
       const x = box.x + (colX[c] ?? 0)
       const y = box.y + (rowY[r] ?? 0)
-      // 跨格宽高：偏移表多存一项（终点），越界回退到框总宽高
+      // 跨格宽高：末列/末行右/下边界由 `?? box.w/box.h` 越界回退兜底
       const w = (colX[c + colspan] ?? box.w) - (colX[c] ?? 0)
       const h = (rowY[r + rowspan] ?? box.h) - (rowY[r] ?? 0)
       g.appendChild(svgEl('rect', {
