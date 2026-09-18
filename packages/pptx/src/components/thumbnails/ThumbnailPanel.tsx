@@ -1,10 +1,11 @@
 // 左侧幻灯片缩略图面板：选择/排序/右键菜单
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { useEditorStore } from '../../store/editorStore'
 import { SlideRenderer } from '../canvas/SlideRenderer'
 
-/** 页码列 16px + 项间距 6px + 选中边框 4px + 内边距 4px */
-const THUMB_RESERVED = 30
+/** 缩略图固定宽度：有/无滚动条宽度保持一致（滚动条空间由列表右侧留白 +
+ * scrollbar-gutter: stable 常驻预留，不挤压缩略图） */
+const THUMB_WIDTH = 160
 
 export function ThumbnailPanel() {
   const presentation = useEditorStore((s) => s.presentation)
@@ -13,22 +14,9 @@ export function ThumbnailPanel() {
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   /** 当前拖拽悬停的目标索引（用于显示插入指示线） */
   const [dropIndex, setDropIndex] = useState<number | null>(null)
-  const listRef = useRef<HTMLDivElement>(null)
-  /** 缩略图宽度随列表可用宽自适应（默认 168）：垂直滚动条出现会挤压列表内容宽，
-   * 固定宽会溢出面板被画布遮挡，故用 ResizeObserver 跟随 clientWidth 收缩 */
-  const [thumbW, setThumbW] = useState(168)
-  useEffect(() => {
-    const node = listRef.current
-    if (!node) return
-    const update = () => setThumbW(Math.max(96, node.clientWidth - THUMB_RESERVED))
-    update()
-    const ro = new ResizeObserver(update)
-    ro.observe(node)
-    return () => ro.disconnect()
-  }, [])
 
   const ratio = presentation.viewportRatio
-  const thumbH = Math.round(thumbW / ratio)
+  const thumbH = Math.round(THUMB_WIDTH / ratio)
 
   /**
    * 计算放置下后的目标索引。
@@ -55,7 +43,7 @@ export function ThumbnailPanel() {
     dropIndex !== null && dragIndex !== null && dropIndex === index && dragIndex < index
 
   return (
-    <div className="flex h-full w-[200px] shrink-0 flex-col border-r border-gray-200 bg-white" data-testid="thumbnail-panel">
+    <div className="flex h-full w-[224px] shrink-0 flex-col border-r border-gray-200 bg-white" data-testid="thumbnail-panel">
       <div className="flex items-center justify-between px-3 py-2">
         <span className="text-xs text-gray-500">幻灯片 {presentation.slides.length}</span>
         <button
@@ -71,7 +59,10 @@ export function ThumbnailPanel() {
           ＋
         </button>
       </div>
-      <div ref={listRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto pb-4">
+      {/* 右侧 pr-4 给 macOS/移动端悬浮（overlay）滚动条留位，滑块不盖缩略图；
+          [scrollbar-gutter:stable] 为经典滚动条环境（Windows）常驻预留宽度，
+          两种环境下有/无滚动条布局均一致 */}
+      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pb-4 pr-4 [scrollbar-gutter:stable]">
         {presentation.slides.map((slide, index) => (
           <div key={slide.id} className="relative flex items-center gap-1.5">
             {/* 拖拽插入指示线（上） */}
@@ -80,7 +71,7 @@ export function ThumbnailPanel() {
             )}
             <span className="w-4 shrink-0 text-right text-[10px] text-gray-400">{index + 1}</span>
             <div
-              className={`group relative min-w-0 flex-1 cursor-pointer rounded-md border-2 p-0.5 transition-colors ${
+              className={`group relative shrink-0 cursor-pointer rounded-md border-2 p-0.5 transition-colors ${
                 index === slideIndex ? 'border-[#d14424]' : 'border-transparent hover:border-gray-300'
               } ${dragIndex === index ? 'opacity-40' : ''}`}
               draggable
@@ -106,8 +97,8 @@ export function ThumbnailPanel() {
               data-testid={`thumb-${index}`}
             >
               <div className="overflow-hidden rounded bg-white shadow-sm">
-                <div style={{ width: thumbW, height: thumbH }}>
-                  <div style={{ transform: `scale(${thumbW / presentation.width})`, transformOrigin: 'top left' }}>
+                <div style={{ width: THUMB_WIDTH, height: thumbH }}>
+                  <div style={{ transform: `scale(${THUMB_WIDTH / presentation.width})`, transformOrigin: 'top left' }}>
                     <SlideRenderer slide={slide} width={presentation.width} height={Math.round(presentation.width / ratio)} staticMode />
                   </div>
                 </div>
