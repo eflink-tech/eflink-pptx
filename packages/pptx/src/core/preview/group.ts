@@ -20,10 +20,12 @@ export async function renderGroup(grpSp: Element, ctx: PreviewCtx): Promise<SVGE
     const chy = emu2pxF(parseInt(attr(chOff, 'y') ?? '0', 10))
     const chcx = emu2pxF(parseInt(attr(chExt, 'cx') ?? '0', 10)) || 1 // 防除零：0 视为 1（不缩放）
     const chcy = emu2pxF(parseInt(attr(chExt, 'cy') ?? '0', 10)) || 1
-    // child→parent 映射：T(off)·S(ext/chExt)·T(-chOff)；旋转置于链尾 = 对已映射到父空间的组合绕中心旋转
-    const parts = [`translate(${ox},${oy})`, `scale(${cx / chcx},${cy / chcy})`, `translate(${-chx},${-chy})`]
+    // SVG transform 串 "A B" 矩形为 A×B（右侧先作用）；OOXML 语义 p' = R(绕父空间组合中心)·T(off)·S·T(-chOff)·p，
+    // 因此 rotate 必须在串首（最后作用于已映射到父空间的坐标），置于串尾会错误地旋转子空间坐标
+    const parts: string[] = []
     const rot = parseInt(attr(xfrm, 'rot') ?? '0', 10) / 60000
     if (rot) parts.push(`rotate(${rot},${ox + cx / 2},${oy + cy / 2})`)
+    parts.push(`translate(${ox},${oy})`, `scale(${cx / chcx},${cy / chcy})`, `translate(${-chx},${-chy})`)
     g.setAttribute('transform', parts.join(' '))
   }
   for (const child of Array.from(grpSp.children)) {

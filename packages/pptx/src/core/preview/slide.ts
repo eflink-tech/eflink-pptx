@@ -1,9 +1,11 @@
 /** 单页渲染：背景回退链（slide→layout→master→lt1 兜底）+ 版式/母版装饰与占位符位置表 + slide 自身元素 → <svg>。
- * slide 部件缺失返回 null（由调用方计入 slideParseFailed）；背景/装饰/元素逐项降级，不中断整页。 */
+ * 失败语义：slide 部件缺失返回 null、slide XML 畸形上抛（均由调用方计入 report）；layout/master 畸形按部件降级
+ * （console.warn + 跳过该部件，背景单级失败继续回退下一级），背景/装饰/元素级失败均不中断整页。 */
 import { attr, firstDescendant, parseXML } from '../import/xml'
 import { collectPlaceholders, findAncestry, parseBackgroundFill } from '../import/master'
-import { parseThemeForMaster } from '../import/theme'
+import { DEFAULT_SCHEME, parseThemeForMaster } from '../import/theme'
 import type { PptxPackage } from '../import/package'
+import type { PptxTheme } from '../import/theme'
 import type { ImportReport } from '../../types/slides'
 import { SVG_NS, emu2pxF, svgEl, type PreviewCtx } from './svg'
 import { registerLinearGradient } from './shape'
@@ -22,13 +24,11 @@ async function appendBgPart(
   svg: SVGSVGElement,
   pkg: PptxPackage,
   partPath: string,
+  doc: Document,
   ctx: PreviewCtx,
   w: number,
   h: number,
 ): Promise<boolean> {
-  const xml = await pkg.text(partPath)
-  if (!xml) return false
-  const doc = parseXML(xml)
   const bg = firstDescendant(doc.documentElement, 'p:bg')
   const fill = parseBackgroundFill(bg, ctx.theme)
   if (!bg || !fill) return false
@@ -65,9 +65,16 @@ export async function renderSlide(
 ): Promise<SVGSVGElement | null> {
   const xml = await pkg.text(slidePath)
   if (!xml) return null
-  const slideDoc = parseXML(xml)
+  const slideDoc = parseXML(xml) // slide 部件畸形：整页失败上抛，由调用方计入 slideParseFailed
   const { layoutPath, masterPath } = await findAncestry(pkg, slidePath)
-  const theme = await parseThemeForMaster(pkg, masterPath)
+  // master 畸形时主题解析同样会抛错（内部 parseXML）：降级默认主题，不拖垮整页
+  let theme: PptxTheme
+  try {
+    theme = await parseThemeForMaster(pkg, masterPath)
+  } catch (e) {
+    console.warn('[pptx-preview] 主题解析失败:', masterPath, e)
+    theme = { schemeColors: { ...DEFAULT_SCHEME }, majorFont: 'Calibri', minorFont: 'Calibri', colorMap: {} }
+  }
 
   // SVG 根：viewBox = 源画布尺寸（EMU→px 浮点），预览坐标 = 源画布 px
   const w = emu2pxF(srcW)
@@ -79,6 +86,18 @@ export async function renderSlide(
   svg.setAttribute('height', String(h))
   const defs = svgEl('defs')
   svg.appendChild(defs)
+
+  // 每部件解析一次（背景与装饰共用同一 Document）；layout/master 畸形单部件降级（warn + 跳过），不拖垮整页
+  const docs = new Map<string, Document>()
+  for (const partPath of [slidePath, layoutPath, masterPath]) {
+    if (!partPath) continue
+    try {
+      const partXml = await pkg.text(partPath)
+      if (partXml) docs.set(partPath, parseXML(partXml))
+    } catch (e) {
+      console.warn('[pptx-preview] 部件解析失败:', partPath, e)
+    }
+  }
 
   // 占位符位置表：版式/母版合入（不覆盖），key = idx ?? type（EMU 空间，与 geomOf 回退口径一致）
   const placeholders = new Map<string, { x: number; y: number; w: number; h: number }>()
@@ -94,25 +113,31 @@ export async function renderSlide(
     uid: (prefix: string) => `${prefix}-p${pageIdx}-${n++}`,
   })
 
-  // 背景回退链：slide → layout → master，最终 lt1 兜底
+  // 背景回退链：slide → layout → master，最终 lt1 兜底；单部件背景失败继续回退下一级
   let hasBg = false
   for (const partPath of [slidePath, layoutPath, masterPath]) {
     if (!partPath) continue
-    if (await appendBgPart(svg, pkg, partPath, makeCtx(partPath), w, h)) {
-      hasBg = true
-      break
+    const doc = docs.get(partPath)
+    if (!doc) continue
+    try {
+      if (await appendBgPart(svg, pkg, partPath, doc, makeCtx(partPath), w, h)) {
+        hasBg = true
+        break
+      }
+    } catch (e) {
+      console.warn('[pptx-preview] 背景解析失败:', partPath, e)
     }
   }
   if (!hasBg) {
     svg.appendChild(svgEl('rect', { x: 0, y: 0, width: w, height: h, fill: theme.schemeColors.lt1 ?? '#FFFFFF' }))
   }
 
-  // 版式/母版层：占位符位置合入 + 非占位符装饰渲染
+  // 版式/母版层：占位符位置合入 + 非占位符装饰渲染（元素级异常由 renderSpTreeNode 内部捕获）
   for (const partPath of [layoutPath, masterPath]) {
     if (!partPath) continue
-    const partXml = await pkg.text(partPath)
-    if (!partXml) continue
-    const spTree = spTreeOf(parseXML(partXml))
+    const doc = docs.get(partPath)
+    if (!doc) continue
+    const spTree = spTreeOf(doc)
     if (!spTree) continue
     for (const [k, v] of collectPlaceholders(spTree)) {
       if (!placeholders.has(k)) placeholders.set(k, v)

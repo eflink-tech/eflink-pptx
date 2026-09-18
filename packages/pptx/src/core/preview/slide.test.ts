@@ -136,4 +136,15 @@ describe('preview/renderSlide', () => {
     const pkg = await PptxPackage.load(await buildPptx())
     expect(await renderSlide(pkg, 'ppt/slides/missing.xml', 12192000, 6858000, 0, { skipped: {} })).toBeNull()
   })
+
+  it('master XML 畸形 → 单部件降级不拖垮整页（默认主题 lt1 兜底背景，不抛错）', async () => {
+    const zip = await JSZip.loadAsync(await buildPptx())
+    zip.file('ppt/slideMasters/slideMaster1.xml', '<p:sldMaster xmlns:p="urn:p"><p:cSld>') // 故意畸形
+    const pkg = await PptxPackage.load(await zip.generateAsync({ type: 'blob' }))
+    // master 降级后占位符位置表为空：slide 占位符无位置被保守丢弃（与一期 parseSlideAncestry 语义一致）
+    const svg = (await renderSlide(pkg, 'ppt/slides/slide1.xml', 12192000, 6858000, 0, { skipped: {} }))!
+    expect(svg.getAttribute('viewBox')).toBe('0 0 1280 720')
+    expect(svg.querySelector('rect[fill="#FFFFFF"]')).not.toBeNull() // 默认主题 lt1 兜底背景
+    expect(svg.querySelector('foreignObject')).toBeNull() // 无继承位置的占位符不渲染
+  })
 })
