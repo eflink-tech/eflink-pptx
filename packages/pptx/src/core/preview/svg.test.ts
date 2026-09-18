@@ -1,24 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { parseXML } from '../import/xml'
-import type { ImportReport } from '../../types/slides'
-import { SVG_NS, svgEl, emu2pxF, sz2px, geomOf, boxTransform, type PreviewCtx } from './svg'
-
-/** 构造最小预览上下文（结构兼容 ParseContext，pkg 仅占位） */
-export function makeCtx(overrides?: Partial<PreviewCtx>): PreviewCtx {
-  const defs = document.createElementNS(SVG_NS, 'defs')
-  let n = 0
-  return {
-    pkg: {} as never,
-    partPath: 'ppt/slides/slide1.xml',
-    theme: { schemeColors: {}, majorFont: 'Calibri', minorFont: 'Calibri', colorMap: {} },
-    report: { skipped: {} } as ImportReport,
-    scale: { x: 1, y: 1 },
-    placeholders: new Map(),
-    defs,
-    uid: (prefix: string) => `${prefix}-${n++}`,
-    ...overrides,
-  }
-}
+import { svgEl, emu2pxF, sz2px, geomOf, boxTransform } from './svg'
+import { makeCtx } from './test-utils'
 
 describe('preview/svg 助手', () => {
   it('emu2pxF：EMU→px 浮点不取整', () => {

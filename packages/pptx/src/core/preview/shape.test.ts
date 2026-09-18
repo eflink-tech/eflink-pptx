@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { parseXML } from '../import/xml'
 import { renderShape, renderLine } from './shape'
-import { makeCtx } from './svg.test'
+import { makeCtx } from './test-utils'
 
 const NS = 'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"'
 const wrap = (inner: string) => parseXML(`<root ${NS}>${inner}</root>`).documentElement.firstElementChild as Element
