@@ -49,7 +49,7 @@ src/core/import/
 
 画布约定不变：目标 1280×(1280/viewportRatio)，EMU→px 1px=9525EMU。
 
-导出侧维持 pptxgenjs 不动，仅顺带修复导入新能力对应的导出缺口（渐变填充由截图兜底改为原生 gradFill 等）。
+导出侧维持 pptxgenjs 不动。注意：pptxgenjs 4 不支持形状渐变填充，渐变导出维持现有「离屏截图兜底」策略，不做原生 gradFill 改造。
 
 ## 3. 元素级兼容度与降级策略（第一期）
 
@@ -59,7 +59,7 @@ src/core/import/
 | 形状 | 全部预设 prstGeom（180+，现为 50）；渐变填充（linear 取首尾色）；阴影（outerShdw → shadow 字段）；custGeom → SVG path 存 `path` 字段 | 无对应形状 → 离屏渲染降级为图片 |
 | 组合 grpSp | 递归展开打平，子元素坐标按 grpSp 变换矩阵折算 | 解析失败丢弃该组合并计入报告 |
 | 图片 | 保留现状 + 裁剪（srcRect）/圆角/边框 | — |
-| 表格 | 单元格富文本（去除现有 stripTags 打平）/合并/边框色宽 | — |
+| 表格 | 单元格首 run 样式提取（加粗/斜体/颜色/字号 → style 字段；渲染器 cell.text 为纯文本，富文本渲染留二期） /合并/边框色宽 | — |
 | 图表 | 新增图表导入：bar/line/pie/doughnut/area/scatter → 内部 ChartElement | 不识别类型 → chart part 缓存图片或占位框 |
 | 母版/版式 | 背景（纯色/渐变/图片）、母版装饰元素合入每页、占位符位置作为文本框默认样式 | — |
 | 超链接 | 文本 run 级 r:link → TipTap link mark | — |
