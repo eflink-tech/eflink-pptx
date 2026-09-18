@@ -88,6 +88,11 @@ export function EditableCanvas() {
     return id
   }, [])
 
+  // 双击检测兜底：Chromium 在 mousedown target 为文本 span（导入富文本元素）且 mousedown 被
+  // preventDefault 时可能不派发原生 dblclick，导致双击无法进入编辑；此处以连续两次 mousedown
+  // （同元素、350ms 内、位移 <5px）自行判定双击，与原生 dblclick 路径幂等
+  const lastClickRef = useRef<{ id: string; t: number; x: number; y: number } | null>(null)
+
   const startMove = useCallback((e: React.MouseEvent, ids: string[]) => {
     const store = useEditorStore.getState()
     const slideNow = store.presentation.slides[store.slideIndex]
@@ -139,6 +144,20 @@ export function EditableCanvas() {
     const hitEl = slideNow.elements.find((el) => el.id === hitId)
     if (!hitEl) return
     if (hitEl.lock) return
+
+    // 双击兜底检测（依赖 lastClickRef，见其注释）；text/shape 才进入文本编辑，与 dblclick 路径一致
+    const now = performance.now()
+    const last = lastClickRef.current
+    lastClickRef.current = { id: hitId, t: now, x: e.clientX, y: e.clientY }
+    if (
+      last && last.id === hitId && now - last.t < 350
+      && Math.hypot(e.clientX - last.x, e.clientY - last.y) < 5
+      && (hitEl.type === 'text' || hitEl.type === 'shape')
+    ) {
+      lastClickRef.current = null
+      store.setEditingId(hitId)
+      return
+    }
 
     let ids: string[]
     if (e.shiftKey) {
