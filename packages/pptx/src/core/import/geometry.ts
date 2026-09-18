@@ -68,9 +68,9 @@ export function custGeomToPath(cust: Element, w: number, h: number): string | nu
   for (const pathEl of directChildren(pathLst, 'a:path')) {
     const pw = parseInt(attr(pathEl, 'w') ?? '0', 10) || emuW
     const ph = parseInt(attr(pathEl, 'h') ?? '0', 10) || emuH
-    // 归一化到 0-100 视口空间：坐标超出路径尺寸时裁剪到视口边界
-    const fx = (x: number) => Math.min(100, Math.max(0, (x / pw) * 100))
-    const fy = (y: number) => Math.min(100, Math.max(0, (y / ph) * 100))
+    // 纯归一化到 0-100 视口空间：坐标超出路径尺寸合法，不做有损裁剪（渲染端 viewBox 负责裁剪显示）
+    const fx = (x: number) => (x / pw) * 100
+    const fy = (y: number) => (y / ph) * 100
     for (const seg of Array.from(pathEl.children)) {
       const pts = directChildren(seg, 'a:pt').map((pt) => [
         parseInt(attr(pt, 'x') ?? '0', 10),
@@ -97,8 +97,7 @@ export function custGeomToPath(cust: Element, w: number, h: number): string | nu
           cmds.push('Z')
           break
         case 'a:arcTo':
-          // 圆弧参数未实现：降级为直线连接到终点
-          if (pts[0]) cmds.push(`L${fmt(fx(pts[0][0]))},${fmt(fy(pts[0][1]))}`)
+          // a:arcTo 无 a:pt 子元素，暂不支持圆弧参数：跳过该段（弦线近似，由前后段连线闭合）
           break
         default:
           break

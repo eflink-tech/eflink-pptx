@@ -35,8 +35,8 @@ describe('geometry', () => {
         </a:path>
       </a:pathLst>
     </a:custGeom>`)
-    // 元素 96x96px → 952500 EMU；路径缺省 w/h 用元素尺寸
-    expect(custGeomToPath(cust, 96, 96)).toBe('M0,0 C0,100 100,100 100,0')
+    // 元素 96x96px → 914400 EMU；路径缺省 w/h 用元素尺寸；坐标超界不裁剪（渲染端 viewBox 负责裁剪显示）
+    expect(custGeomToPath(cust, 96, 96)).toBe('M0,0 C0,104.17 104.17,104.17 104.17,0')
   })
 
   it('custGeomToPath：无 pathLst 返回 null', () => {
