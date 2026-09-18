@@ -36,6 +36,10 @@ describe('preview/renderGroup', () => {
       <a:off x="0" y="0"/><a:ext cx="1905000" cy="952500"/><a:chOff x="0" y="0"/><a:chExt cx="1905000" cy="952500"/>
     </a:xfrm></p:grpSpPr>${GRP}</p:grpSp>`)
     const g = (await renderGroup(outer, ctx))!
-    expect(g.querySelectorAll('g').length).toBeGreaterThanOrEqual(1)
+    // 恰为 2 个 g：内层组合 g + 形状 g（renderShape 的形状容器）
+    expect(g.querySelectorAll('g').length).toBe(2)
+    // 内层组合的 transform 与单独渲染 GRP 时一致（外层恒等 xfrm 不引入额外映射）
+    const inner = g.querySelector('g')!
+    expect(inner.getAttribute('transform')).toBe('rotate(90,200,150) translate(100,100) scale(2,2) translate(0,0)')
   })
 })

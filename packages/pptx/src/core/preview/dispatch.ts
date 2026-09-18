@@ -22,10 +22,11 @@ export async function renderSpTreeNode(node: Element, ctx: PreviewCtx): Promise<
         return el ? [el] : []
       }
       case 'p:graphicFrame': {
-        // 表格（a:tbl）与图表（c:chart）共用 graphicFrame 容器，按内容区分
-        const el = firstDescendant(node, 'a:tbl')
-          ? await renderTable(node, ctx)
-          : await renderChart(node, ctx)
+        // 表格（a:tbl）与图表（c:chart）共用 graphicFrame 容器；SmartArt/OLE 等未知类型计入报告
+        const isTable = Boolean(firstDescendant(node, 'a:tbl'))
+        const isChart = Boolean(firstDescendant(node, 'c:chart'))
+        if (!isTable && !isChart) addSkipped(ctx.report, 'graphicFrameUnknown')
+        const el = isTable ? await renderTable(node, ctx) : await renderChart(node, ctx)
         return el ? [el] : []
       }
       case 'p:grpSp': {
