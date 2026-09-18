@@ -92,6 +92,16 @@ describe('txBodyToHTML', () => {
     expect(r.html).toContain(`font-family:'Calibri', '汉仪雅酷黑', 'PingFang SC', 'Microsoft YaHei', sans-serif`)
   })
 
+  it('a:fld 字段（页码/日期）渲染为文本 run，不丢弃', async () => {
+    const txBody = el(`<p:txBody xmlns:p="urn:p" xmlns:a="urn:a">
+      <a:bodyPr/>
+      <a:p><a:fld id="{GUID}" type="slidenum"><a:rPr sz="1800"/><a:t>3</a:t></a:fld></a:p>
+    </p:txBody>`)
+    const r = await txBodyToHTML(txBody, theme)
+    expect(r.html).toContain('3')
+    expect(r.html).toContain('font-size:24px')
+  })
+
   it('超链接 External：白名单协议产出 <a href>', async () => {
     const pkg = await makePkg('https://example.com')
     const txBody = el(`<p:txBody xmlns:p="urn:p" xmlns:a="urn:a" xmlns:r="urn:r">

@@ -39,7 +39,8 @@ async function paragraphToInner(p: Element, theme: PptxTheme, pkg: PptxPackage |
       inner += '<br>'
       continue
     }
-    if (node.nodeName !== 'a:r') continue
+    // a:r 普通 run；a:fld 字段（页码/日期等）结构相同（a:rPr + a:t），按缓存文本渲染为静态 run
+    if (node.nodeName !== 'a:r' && node.nodeName !== 'a:fld') continue
     const t = firstDescendant(node, 'a:t')
     const text = t?.textContent ?? ''
     if (!text) continue
