@@ -47,6 +47,11 @@ export class PptxPackage {
     return (await this.zip.file(path)?.async('text')) ?? null
   }
 
+  /** zip 内全部文件路径列表（如 sldIdLst 缺失时按 slideN.xml 枚举页面兜底） */
+  paths(): string[] {
+    return Object.keys(this.zip.files)
+  }
+
   /** 部件的 rels：'ppt/slides/slide1.xml' → 解析 'ppt/slides/_rels/slide1.xml.rels'，target 已解析为包内绝对路径。
    * 根部件（无 '/'）按约定解析 '_rels/<name>.rels'。
    * 返回值不得修改（内部缓存引用）。 */

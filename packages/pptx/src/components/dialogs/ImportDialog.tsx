@@ -3,7 +3,7 @@ import { Modal } from './ModalHost'
 import { useEditorStore } from '../../store/editorStore'
 import { useUIStore, useToastStore } from '../../store/uiStore'
 import { parseJSONFile } from '../../core/export/json'
-import { importPPTX } from '../../core/import/pptx'
+import { importPPTX } from '../../core/import'
 
 export function ImportDialog() {
   const toast = useToastStore.getState().toast

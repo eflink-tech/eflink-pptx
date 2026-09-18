@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import JSZip from 'jszip'
-import { importPPTX, resolveTarget } from './pptx'
+import { importPPTX, resolveTarget } from './index'
 
 /** 构造最小合法 PPTX（一页：一个文本框 + 一个矩形形状） */
 async function buildMinimalPptx(): Promise<File> {
