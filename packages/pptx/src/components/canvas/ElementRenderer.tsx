@@ -169,6 +169,8 @@ function ShapeItem({
   onChange?: (html: string) => void
 }) {
   const meta = getShapePath(el.shapeKey)
+  // custGeom 导入产出：优先使用元素自带的自定义路径（0-100 视口空间）
+  const shapeD = el.path ?? meta.path
   const gradientId = `sg-${el.id}`
   const isGradient = typeof el.fill === 'object' && el.fill !== null
   const fill = isGradient ? `url(#${gradientId})` : typeof el.fill === 'string' ? el.fill : 'none'
@@ -199,7 +201,7 @@ function ShapeItem({
           {isGradient && <ShapeGradient id={gradientId} gradient={el.fill as never} />}
         </defs>
         <path
-          d={meta.path}
+          d={shapeD}
           fill={fill}
           fillRule={meta.evenodd ? 'evenodd' : undefined}
           stroke={el.outline && el.outline.width > 0 ? el.outline.color : undefined}
