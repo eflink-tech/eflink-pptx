@@ -18,6 +18,8 @@ interface ParaInfo {
   align: string
   kind: 'none' | 'bullet' | 'number'
   inner: string
+  /** 行距样式（line-height:...），无行距时为空串 */
+  spacing: string
 }
 
 function bulletKind(p: Element): 'none' | 'bullet' | 'number' {
@@ -49,6 +51,12 @@ async function paragraphToInner(p: Element, theme: PptxTheme, pkg: PptxPackage |
       if (attr(rPr, 'i') === '1') styles.push('font-style:italic')
       if (attr(rPr, 'u') === 'sng') styles.push('text-decoration:underline')
       if (attr(rPr, 'strike') === 'sng') styles.push('text-decoration:line-through')
+      const spc = attr(rPr, 'spc')
+      if (spc) {
+        // 字距 1/100 pt → px（与 font-size 同源换算），保留两位小数防浮点噪声
+        const ls = Math.round((parseInt(spc, 10) / 100 / 0.75) * 100) / 100
+        styles.push(`letter-spacing:${ls}px`)
+      }
       const color = resolveColor(directChild(rPr, 'a:solidFill'), theme)
       if (color) styles.push(`color:${color}`)
       const latin = directChild(rPr, 'a:latin')
@@ -92,7 +100,14 @@ export async function txBodyToHTML(
     const algn = attr(pPr, 'algn')
     const align = algn === 'ctr' ? 'center' : algn === 'r' ? 'right' : algn === 'just' ? 'justify' : 'left'
     const inner = await paragraphToInner(p, theme, pkg, partPath)
-    paras.push({ align, kind: bulletKind(p), inner })
+    // 行距：spcPct（1/100000 → 倍数）优先，spcPts（1/100 pt → px）覆盖
+    const lnSpc = pPr ? directChild(pPr, 'a:lnSpc') : null
+    let spacing = ''
+    const pct = lnSpc ? firstDescendant(lnSpc, 'a:spcPct') : null
+    if (pct) spacing = `line-height:${(parseInt(attr(pct, 'val') ?? '100000', 10)) / 100000}`
+    const pts = lnSpc ? firstDescendant(lnSpc, 'a:spcPts') : null
+    if (pts) spacing = `line-height:${Math.round(parseInt(attr(pts, 'val') ?? '0', 10) / 100 / 0.75)}px`
+    paras.push({ align, kind: bulletKind(p), inner, spacing })
   }
 
   const html: string[] = []
@@ -100,7 +115,7 @@ export async function txBodyToHTML(
   while (i < paras.length) {
     const para = paras[i]
     if (para.kind === 'none') {
-      html.push(`<p style="text-align:${para.align}">${para.inner || '&nbsp;'}</p>`)
+      html.push(`<p style="text-align:${para.align}${para.spacing ? `;${para.spacing}` : ''}">${para.inner || '&nbsp;'}</p>`)
       i += 1
       continue
     }
@@ -108,7 +123,7 @@ export async function txBodyToHTML(
     const items: string[] = []
     while (i < paras.length && paras[i].kind === para.kind) {
       const cur = paras[i]
-      items.push(`<li style="text-align:${cur.align}">${cur.inner || '&nbsp;'}</li>`)
+      items.push(`<li style="text-align:${cur.align}${cur.spacing ? `;${cur.spacing}` : ''}">${cur.inner || '&nbsp;'}</li>`)
       i += 1
     }
     html.push(`<${tag}>${items.join('')}</${tag}>`)

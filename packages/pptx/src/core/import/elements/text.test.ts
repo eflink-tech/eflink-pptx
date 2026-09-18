@@ -94,6 +94,35 @@ describe('txBodyToHTML', () => {
   })
 })
 
+describe('txBodyToHTML 字距与行距', () => {
+  it('rPr@spc → letter-spacing', async () => {
+    const txBody = el(`<p:txBody xmlns:p="urn:p" xmlns:a="urn:a">
+      <a:bodyPr/>
+      <a:p><a:r><a:rPr lang="zh-CN" spc="300"/><a:t>AB</a:t></a:r></a:p>
+    </p:txBody>`)
+    const r = await txBodyToHTML(txBody, theme)
+    expect(r.html).toContain('letter-spacing:4px') // 300/100/0.75 = 4
+  })
+
+  it('a:lnSpc a:spcPct → line-height 倍数', async () => {
+    const txBody = el(`<p:txBody xmlns:p="urn:p" xmlns:a="urn:a">
+      <a:bodyPr/>
+      <a:p><a:pPr><a:lnSpc><a:spcPct val="150000"/></a:lnSpc></a:pPr><a:r><a:rPr lang="zh-CN"/><a:t>x</a:t></a:r></a:p>
+    </p:txBody>`)
+    const r = await txBodyToHTML(txBody, theme)
+    expect(r.html).toContain('line-height:1.5')
+  })
+
+  it('a:lnSpc a:spcPts → line-height px', async () => {
+    const txBody = el(`<p:txBody xmlns:p="urn:p" xmlns:a="urn:a">
+      <a:bodyPr/>
+      <a:p><a:pPr><a:lnSpc><a:spcPts val="2000"/></a:lnSpc></a:pPr><a:r><a:rPr lang="zh-CN"/><a:t>x</a:t></a:r></a:p>
+    </p:txBody>`)
+    const r = await txBodyToHTML(txBody, theme)
+    expect(r.html).toContain('line-height:27px') // 2000/100/0.75 = 26.67 → 四舍五入 27
+  })
+})
+
 /** 构造含 slide1.xml 与 External 超链接 rels 的真实包 */
 async function makePkg(linkTarget: string): Promise<PptxPackage> {
   const zip = new JSZip()
