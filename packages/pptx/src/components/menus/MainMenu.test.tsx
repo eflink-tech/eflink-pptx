@@ -3,10 +3,13 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { MainMenu } from './MainMenu'
 import { useUIStore } from '../../store/uiStore'
+import { setPptxShareHandler } from '../../core/share/shareBridge'
 
 // vitest 未开启 globals，testing-library 不会自动注册 cleanup，需显式清理避免用例间 DOM 残留
 afterEach(() => {
   cleanup()
+  // 还原分享 handler，避免注入状态泄漏到其他用例
+  setPptxShareHandler(null)
 })
 
 describe('MainMenu', () => {
@@ -33,5 +36,20 @@ describe('MainMenu', () => {
     fireEvent.click(screen.getByTestId('main-menu'))
     fireEvent.click(screen.getByText('快捷键'))
     expect(useUIStore.getState().modal).toBe('hotkey')
+  })
+
+  it('未注入分享 handler 时不显示分享入口，注入后出现', () => {
+    // 默认未注入 handler：分享入口不渲染
+    const { unmount } = render(<MainMenu />)
+    fireEvent.click(screen.getByTestId('main-menu'))
+    expect(screen.queryByText('分享')).toBeNull()
+    unmount()
+
+    // 注入 handler 后重新渲染：分享入口出现
+    setPptxShareHandler(() => Promise.resolve({ url: 'https://example.com/s/1' }))
+    render(<MainMenu />)
+    fireEvent.click(screen.getByTestId('main-menu'))
+    fireEvent.mouseEnter(screen.getByText('文件'))
+    expect(screen.getByText('分享')).toBeTruthy()
   })
 })

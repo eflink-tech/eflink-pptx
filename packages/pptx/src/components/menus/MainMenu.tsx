@@ -212,8 +212,8 @@ export function MainMenu() {
               key={cat.key}
               className="relative"
               onMouseEnter={() => {
-                // 叶子分类（快捷键）不展开子菜单
-                if (!cat.leaf) setActiveCat(cat.key)
+                // 叶子分类（快捷键）无子菜单：悬停时收起已展开的子菜单
+                setActiveCat(cat.leaf ? null : cat.key)
               }}
             >
               <button
