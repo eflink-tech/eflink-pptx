@@ -1,19 +1,12 @@
-// 顶部工具栏
-import { useRef, useState } from 'react'
-import logoUrl from '../../assets/pptx-eflink-logo.png'
-import {
-  Undo2, Redo2, MonitorPlay, MonitorSpeaker, Sparkles, Grid3x3, LayoutTemplate,
-  Palette, Upload, Download, FilePlus2, Save, PanelLeft, Keyboard, Search, ArrowLeft, Share2, MessageCircle,
-} from 'lucide-react'
+// 顶部工具栏：品牌区 + 主菜单 + 高频图标（撤销/重做/插入/AI/放映）
+// 文件类与低频功能入口已收进 MainMenu（文件/设计/视图/放映/快捷键）
+import { ArrowLeft, Undo2, Redo2, MonitorPlay, Sparkles } from 'lucide-react'
 import { useEditorStore } from '../../store/editorStore'
-import { useUIStore, useToastStore } from '../../store/uiStore'
-import { createDoc, saveDoc } from '../../core/editor/persistence'
+import { useUIStore } from '../../store/uiStore'
 import { getEditorBackHref } from '../../core/editor/chrome'
-import { insertImageFile } from '../../core/editor/media'
 import { InsertMenu } from '../menus/InsertMenu'
-import { ShareDialog } from '../common/ShareDialog'
-import { getPptxShareHandler } from '../../core/share/shareBridge'
-import type { LoadedDoc } from '../../core/editor/persistence'
+import { MainMenu } from '../menus/MainMenu'
+import logoUrl from '../../assets/pptx-eflink-logo.png'
 
 function ToolButton({ icon, label, onClick, disabled, active }: {
   icon: React.ReactNode
@@ -40,26 +33,7 @@ export function TopBar() {
   const undoDepth = useEditorStore((s) => s.history.length)
   const redoDepth = useEditorStore((s) => s.future.length)
   const ui = useUIStore()
-  const fileInputRef = useRef<HTMLInputElement>(null)
   const backHref = getEditorBackHref()
-  // 分享弹窗（doc 为点击"分享"时刻的文档快照，弹窗期间编辑不影响本次分享内容）
-  const [shareOpen, setShareOpen] = useState(false)
-  const [shareDoc, setShareDoc] = useState<LoadedDoc | null>(null)
-  const closeShare = useRef(() => setShareOpen(false)).current
-  // 分享前强制保存：先落库最新内容，再捕获当前文档；保存失败则中止分享（避免分享远端旧数据）
-  const openShare = async () => {
-    const s = useEditorStore.getState()
-    if (!s.docId) { useToastStore.getState().toast('文档未初始化，无法分享', 'error'); return }
-    try {
-      await saveDoc(s.docId, s.docName, s.presentation)
-      s.markSaved()
-    } catch {
-      useToastStore.getState().toast('保存失败，无法分享', 'error')
-      return
-    }
-    setShareDoc({ id: s.docId, name: s.docName, presentation: s.presentation })
-    setShareOpen(true)
-  }
 
   return (
     <div className="flex h-12 shrink-0 items-center gap-1 border-b border-gray-200 bg-white px-3" data-testid="topbar">
@@ -75,17 +49,7 @@ export function TopBar() {
       <img src={logoUrl} alt="易飞演示文稿" className="mr-1.5 h-8 w-8 rounded-full" />
       <span className="mr-2 text-base font-bold text-[#d14424]">易飞演示文稿</span>
 
-      <ToolButton icon={<FilePlus2 size={17} />} label="新建文档" onClick={async () => {
-        const doc = await createDoc('未命名演示文稿')
-        useEditorStore.getState().loadDocument(doc)
-      }} />
-      <ToolButton icon={<Save size={17} />} label="保存（Ctrl+S）" onClick={() => {
-        const s = useEditorStore.getState()
-        if (!s.docId) { useToastStore.getState().toast('文档未初始化，无法保存', 'error'); return }
-        saveDoc(s.docId, s.docName, s.presentation)
-          .then(() => { s.markSaved(); useToastStore.getState().toast('已保存', 'success') })
-          .catch(() => useToastStore.getState().toast('保存失败，请重试', 'error'))
-      }} />
+      <MainMenu />
 
       <div className="mx-1 h-6 w-px bg-gray-200" />
 
@@ -98,35 +62,8 @@ export function TopBar() {
       <InsertMenu />
 
       <div className="flex-1" />
-      <div className="mx-1 h-6 w-px bg-gray-200" />
-
-      <ToolButton icon={<LayoutTemplate size={17} />} label="模板库" onClick={() => ui.openModal('template')} />
-      <ToolButton icon={<Palette size={17} />} label="主题配色" onClick={() => ui.openModal('theme')} />
-      <ToolButton icon={<Upload size={17} />} label="导入（PPTX/JSON）" onClick={() => ui.openModal('import')} />
-      <ToolButton icon={<Download size={17} />} label="导出" onClick={() => ui.openModal('export')} />
-      <ToolButton icon={<Search size={17} />} label="查找替换（Ctrl+F）" onClick={() => ui.openModal('findReplace')} />
-      {/* 分享入口仅在宿主注入分享实现后出现（纯组件独立运行时不显示） */}
-      {getPptxShareHandler() !== null && (
-        <>
-        <ToolButton icon={<Share2 size={17} />} label="分享" onClick={() => void openShare()} />
-        <ToolButton icon={<MessageCircle size={17} />} label="反馈" onClick={() => window.open('/contact', '_blank')} />
-        </>
-      )}
 
       <div className="mx-1 h-6 w-px bg-gray-200" />
-      <ToolButton icon={<Keyboard size={17} />} label="快捷键" onClick={() => ui.openModal('hotkey')} />
-
-      <input
-        type="file"
-        ref={fileInputRef}
-        accept="image/*"
-        className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0]
-          if (file) insertImageFile(file)
-          e.target.value = ''
-        }}
-      />
 
       <button
         className={`flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs ${ui.aiPanelVisible ? 'bg-[#d14424] text-white' : 'bg-[#fbeae5] text-[#d14424] hover:bg-[#f6d9d0]'}`}
@@ -138,8 +75,6 @@ export function TopBar() {
       </button>
 
       <div className="mx-1 h-6 w-px bg-gray-200" />
-      <ToolButton icon={<Grid3x3 size={17} />} label="网格" active={ui.gridVisible} onClick={() => ui.toggleGrid()} />
-      <ToolButton icon={<PanelLeft size={17} />} label="缩略图面板" active={ui.thumbnailsVisible} onClick={() => ui.toggleThumbnails()} />
 
       <button
         className="ml-1 flex items-center gap-1 rounded-md bg-[#d14424] px-3 py-1.5 text-xs text-white hover:bg-[#b93a1d]"
@@ -149,18 +84,8 @@ export function TopBar() {
       >
         <MonitorPlay size={15} />
       </button>
-      <button
-        className="ml-1 flex items-center gap-1 rounded-md border border-[#d14424] px-2.5 py-1.5 text-xs text-[#d14424] hover:bg-[#fbeae5]"
-        onClick={() => ui.setPlayerMode('presenter', useEditorStore.getState().slideIndex)}
-        title="演讲者视图"
-        data-testid="play-presenter"
-      >
-        <MonitorSpeaker size={15} />
-      </button>
 
-      {/* 文档名与保存状态指示已移至底部状态栏（BottomBar），避免重复显示 */}
-
-      <ShareDialog open={shareOpen} doc={shareDoc} onClose={closeShare} />
+      {/* 文档名与保存状态指示在底部状态栏（BottomBar） */}
     </div>
   )
 }
