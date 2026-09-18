@@ -134,7 +134,7 @@ function drawArea(g: SVGElement, chart: ChartElement, box: BoxLike, stacked: boo
   const p = plotRect(box)
   const maxV = valueMax(chart, stacked)
   const n = Math.max(1, labels.length)
-  const cum = new Array<number>(n).fill(0)
+  const cum: number[] = Array.from({ length: n }, () => 0)
   const rows = series.map((sr) => sr.values.map((v, i) => (stacked ? (cum[i] += Math.max(0, v ?? 0)) : Math.max(0, v ?? 0))))
   const order = stacked ? [...rows.keys()].reverse() : [...rows.keys()]
   for (const si of order) {
