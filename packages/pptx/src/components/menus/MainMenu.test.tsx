@@ -31,6 +31,16 @@ describe('MainMenu', () => {
     expect(screen.getByText('保存')).toBeTruthy()
   })
 
+  it('悬停放映分类展开二级菜单（放映/演讲者视图）', () => {
+    render(<MainMenu />)
+    fireEvent.click(screen.getByTestId('main-menu'))
+    // 悬停前「放映」仅出现在一级分类
+    fireEvent.mouseEnter(screen.getByText('放映'))
+    expect(screen.getByText('演讲者视图')).toBeTruthy()
+    // 悬停后「放映」同时存在于一级分类与二级叶子，需用 getAllByText 避免歧义
+    expect(screen.getAllByText('放映').length).toBeGreaterThanOrEqual(1)
+  })
+
   it('点击快捷键叶子分类打开快捷键弹窗', () => {
     render(<MainMenu />)
     fireEvent.click(screen.getByTestId('main-menu'))
