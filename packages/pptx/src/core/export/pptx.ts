@@ -25,6 +25,13 @@ function bufToBase64(buf: ArrayBuffer): string {
   return btoa(binary)
 }
 
+/** pptxgenjs 要求图片 data 携带 MIME base64 头（image/png;base64,...）；
+ * 导出链路（split(',') / bufToBase64）产出的是裸 base64，统一在此补全。
+ * base64 字符集不含分号，含 ";base64," 者必为完整 dataURL 或已带头，直接透传 */
+function withImageHeader(data: string): string {
+  return data.includes(';base64,') ? data : `image/png;base64,${data}`
+}
+
 /** 颜色归一化为 pptxgenjs 需要的 RRGGBB（无 #，透明混合白底） */
 function normColor(color: string | undefined): string | undefined {
   if (!color) return undefined
@@ -414,7 +421,7 @@ export async function exportPPTX(presentation: Presentation, docName: string): P
     } else if (bg && (bg.type === 'gradient' || (bg.type === 'image' && bg.image?.src))) {
       const blob = await renderSlideToBlob({ ...slide, elements: [] }, presentation, 'jpeg')
       const buf = new Uint8Array(await blob.arrayBuffer())
-      s.background = { data: bufToBase64(buf.buffer as ArrayBuffer) }
+      s.background = { data: withImageHeader(bufToBase64(buf.buffer as ArrayBuffer)) }
     }
 
     for (const el of slide.elements) {
@@ -448,11 +455,11 @@ export async function exportPPTX(presentation: Presentation, docName: string): P
               shape: sp.native as never,
             })
           } else if (sp.data) {
-            s.addImage({ ...(sp.props as object), data: sp.data })
+            s.addImage({ ...(sp.props as object), data: withImageHeader(sp.data) })
           }
           break
         case 'image':
-          if (sp.data) s.addImage({ ...(sp.props as object), data: sp.data })
+          if (sp.data) s.addImage({ ...(sp.props as object), data: withImageHeader(sp.data) })
           break
         case 'line':
           s.addShape('line' as never, sp.props as never)
@@ -482,4 +489,4 @@ export async function exportPPTX(presentation: Presentation, docName: string): P
 }
 
 /** 导出前检查用的纯函数（供单测） */
-export { normColor, parseRunsFromHTML, IN as pxToInch, PT as pxToPt, hexToRgb as _hexToRgb }
+export { normColor, parseRunsFromHTML, IN as pxToInch, PT as pxToPt, hexToRgb as _hexToRgb, withImageHeader }

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { chartNativeSpec, normColor, parseRunsFromHTML, pxToInch as IN, pxToPt as PT, exportShape } from './pptx'
+import { chartNativeSpec, normColor, parseRunsFromHTML, pxToInch as IN, pxToPt as PT, exportShape, withImageHeader } from './pptx'
 import type { ChartType, Presentation, ShapeElement, Slide } from '../../types/slides'
 import { createDefaultTheme } from '../../types/slides'
 
@@ -102,6 +102,19 @@ describe('parseRunsFromHTML', () => {
   it('空内容兜底', () => {
     const result = parseRunsFromHTML('')
     expect(result).toHaveLength(1)
+  })
+})
+
+describe('withImageHeader 图片 data 补 base64 头', () => {
+  it('裸 base64 → 补 image/png;base64 头（pptxgenjs 校验要求）', () => {
+    const bare = 'iVBORw0KGgoAAAANSUhEUg=='
+    expect(withImageHeader(bare)).toBe(`image/png;base64,${bare}`)
+  })
+
+  it('完整 dataURL / 已带头 → 原样透传', () => {
+    const url = 'data:image/jpeg;base64,/9j/4AAQ'
+    expect(withImageHeader(url)).toBe(url)
+    expect(withImageHeader('image/jpeg;base64,/9j/4AAQ')).toBe('image/jpeg;base64,/9j/4AAQ')
   })
 })
 
