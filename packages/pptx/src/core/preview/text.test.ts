@@ -16,7 +16,9 @@ describe('preview/renderText', () => {
     const fo = (await renderText(txBody, ctx, BOX))!
     expect(fo.tagName).toBe('foreignObject')
     expect(fo.getAttribute('x')).toBe('100')
+    expect(fo.getAttribute('y')).toBe('100')
     expect(fo.getAttribute('width')).toBe('500')
+    expect(fo.getAttribute('height')).toBe('100')
     const div = fo.firstElementChild as HTMLElement
     expect(div.getAttribute('xmlns')).toBe('http://www.w3.org/1999/xhtml')
     // 默认内边距：lIns/rIns 91440 → 9.6px，tIns/bIns 45720 → 4.8px
