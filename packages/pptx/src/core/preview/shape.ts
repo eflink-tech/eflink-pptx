@@ -68,7 +68,8 @@ export function lnOf(ln: Element | null, ctx: PreviewCtx): Record<string, string
   return out
 }
 
-/** 端点箭头 → defs 登记 marker（triangle/stealth 实心三角、arrow 开放箭头、oval 圆点） */
+/** 端点箭头 → defs 登记 marker（triangle/stealth 实心三角、arrow 开放箭头、oval 圆点）。
+ * diamond/diamond2 等其余 ST_LineEndType 未知类型统一落入实心三角近似（视觉量级接近，精度取舍）。 */
 function registerMarker(ctx: PreviewCtx, type: string, color: string): string {
   const id = ctx.uid('marker')
   let marker: SVGElement
@@ -111,10 +112,11 @@ export function renderLine(node: Element, ctx: PreviewCtx): SVGElement | null {
       line.setAttribute(k, String(v))
     }
   }
+  // ST_LineEndType 含 none：显式 type="none" 表示无箭头，需与缺省（无该元素）同样跳过
   const head = attr(ln ? directChild(ln, 'a:headEnd') : null, 'type')
   const tail = attr(ln ? directChild(ln, 'a:tailEnd') : null, 'type')
-  if (head) line.setAttribute('marker-start', registerMarker(ctx, head, color))
-  if (tail) line.setAttribute('marker-end', registerMarker(ctx, tail, color))
+  if (head && head !== 'none') line.setAttribute('marker-start', registerMarker(ctx, head, color))
+  if (tail && tail !== 'none') line.setAttribute('marker-end', registerMarker(ctx, tail, color))
   return line
 }
 

@@ -68,15 +68,16 @@ describe('preview/renderShape', () => {
   it('noFill → fill:none；rot/flip 上到 g 的 transform', async () => {
     const ctx = makeCtx()
     const sp = wrap(`<p:sp><p:spPr>
-      <a:xfrm rot="1800000" flipH="1"><a:off x="0" y="0"/><a:ext cx="100" cy="100"/></a:xfrm>
+      <a:xfrm rot="1800000" flipH="1"><a:off x="0" y="0"/><a:ext cx="952500" cy="952500"/></a:xfrm>
       <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
       <a:noFill/>
     </p:spPr></p:sp>`)
     const g = (await renderShape(sp, ctx))!
     expect(g.querySelector('path')!.getAttribute('fill')).toBe('none')
     const tf = g.getAttribute('transform')!
-    expect(tf).toContain('rotate(30,')      // rot 先（OOXML 先翻转后旋转）
-    expect(tf).toContain('scale(-1,1)')
+    // 精确断言完整 transform 串（boxTransform({x:0,y:0,w:100,h:100,rot:30,flipH:true})），
+    // 确保顺序锁定：rotate 在 flip 前（OOXML 先翻转后旋转，p' = R·F·p）
+    expect(tf).toBe('rotate(30,50,50) translate(100,0) scale(-1,1) translate(0,0)')
   })
 
   it('p:cxnSp → line + 箭头 marker', () => {
