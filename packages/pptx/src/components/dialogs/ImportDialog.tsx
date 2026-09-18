@@ -22,6 +22,11 @@ const SKIP_LABELS: Record<string, string> = {
   graphicFrameUnknown: '未识别的元素容器',
 }
 
+/** 兼容性报告 skip 项 → 「文案 ×N」列表（applyImport 与预览视图共用） */
+function formatSkipped(report: ImportReport): string[] {
+  return Object.entries(report.skipped).map(([k, v]) => `${SKIP_LABELS[k] ?? k} ×${v}`)
+}
+
 /** 预览状态：文件 + SVG 页面 + 兼容性报告 */
 interface PreviewState {
   file: File
@@ -33,6 +38,7 @@ export function ImportDialog() {
   const toast = useToastStore.getState().toast
   const closeModal = useUIStore.getState().closeModal
   const [preview, setPreview] = useState<PreviewState | null>(null)
+  const [busy, setBusy] = useState(false)
   const gridRef = useRef<HTMLDivElement>(null)
 
   // 预览变化时把 SVG DOM（非 React 元素）直接挂载到网格容器
@@ -49,7 +55,7 @@ export function ImportDialog() {
       page.style.display = 'block'
       cell.appendChild(page)
       const badge = document.createElement('div')
-      badge.className = 'absolute right-1 top-1 rounded bg-black/50 px-1 text-[10px] text-white'
+      badge.className = 'absolute right-1 top-1 rounded bg-black/60 px-1 text-[10px] text-white'
       badge.textContent = String(i + 1)
       cell.appendChild(badge)
       grid.appendChild(cell)
@@ -62,7 +68,7 @@ export function ImportDialog() {
     const { presentation: pres, report } = await importPPTXDetailed(file)
     useEditorStore.getState().pushHistory()
     useEditorStore.getState().replacePresentation(pres)
-    const items = Object.entries(report.skipped).map(([k, v]) => `${SKIP_LABELS[k] ?? k} ×${v}`)
+    const items = formatSkipped(report)
     if (items.length) {
       toast(`已导入 PPTX（${pres.slides.length} 页）；部分内容未完整还原：${items.join('、')}`, 'success')
     } else {
@@ -89,8 +95,13 @@ export function ImportDialog() {
       } else if (file.name.toLowerCase().endsWith('.pptx')) {
         // 先生成高保真预览，用户确认后再真正导入
         toast('正在生成预览…')
-        const { pages, report } = await previewPPTXDetailed(file)
-        setPreview({ file, pages, report })
+        setBusy(true)
+        try {
+          const { pages, report } = await previewPPTXDetailed(file)
+          setPreview({ file, pages, report })
+        } finally {
+          setBusy(false)
+        }
       } else {
         toast('请选择 .pptx 或 .json 文件', 'error')
       }
@@ -101,7 +112,7 @@ export function ImportDialog() {
 
   // 预览视图：SVG 缩略网格 + 降级提示 + 返回/确认
   if (preview) {
-    const items = Object.entries(preview.report.skipped).map(([k, v]) => `${SKIP_LABELS[k] ?? k} ×${v}`)
+    const items = formatSkipped(preview.report)
     return (
       <Modal title="导入预览" width={760}>
         <div ref={gridRef} className="grid max-h-[60vh] grid-cols-3 gap-3 overflow-auto" />
@@ -110,17 +121,22 @@ export function ImportDialog() {
         )}
         <div className="mt-4 flex justify-end gap-2">
           <button
-            className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+            className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            disabled={busy}
             onClick={() => setPreview(null)}
           >
             返回
           </button>
           <button
-            className="rounded-lg bg-[#d14424] px-4 py-2 text-sm text-white hover:opacity-90"
+            className="rounded-lg bg-[#d14424] px-4 py-2 text-sm text-white hover:bg-[#b93a1d] disabled:opacity-50"
+            disabled={busy}
             onClick={() => {
-              const file = preview.file
-              setPreview(null)
-              void applyImport(file).catch(handleError)
+              // busy 期间按钮已禁用；原地导入，失败保留预览供重试
+              setBusy(true)
+              void applyImport(preview.file).catch((error) => {
+                setBusy(false)
+                handleError(error)
+              })
             }}
           >
             确认导入（可编辑）
@@ -136,7 +152,8 @@ export function ImportDialog() {
         <input
           type="file"
           accept=".pptx,.json"
-          className="hidden"
+          className="hidden disabled:opacity-50"
+          disabled={busy}
           onChange={(e) => {
             const file = e.target.files?.[0]
             if (file) void handleFile(file)
