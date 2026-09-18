@@ -2,11 +2,11 @@
 /** 导入入口：解压 → ancestry → 逐页解析 → Presentation（分层容错，失败项计入 report） */
 import type { ImportReport, PPTElement, Presentation, Slide, Theme } from '../../types/slides'
 import { createDefaultTheme } from '../../types/slides'
-import { PptxPackage } from './package'
+import { PptxPackage, type PartRel } from './package'
 import type { PptxTheme } from './theme'
 import { parseSlideAncestry, parseBackgroundFill } from './master'
 import { parseSpTreeNode } from './elements'
-import { IDENTITY_XFORM } from './context'
+import { IDENTITY_XFORM, addSkipped } from './context'
 import { attr, firstDescendant, parseXML } from './xml'
 import { genId } from '../utils/id'
 
@@ -62,9 +62,9 @@ export async function importPPTXDetailed(file: File): Promise<ImportResult> {
   const rels = await pkg.rels('ppt/presentation.xml')
   const slidePaths = slideIds
     .map((id) => attr(id, 'r:id'))
-    .map((rid) => (rid ? rels.get(rid)?.target : undefined))
-    .filter((p): p is string => Boolean(p && !p.startsWith('http')))
-    .map((p) => (p.startsWith('ppt/') ? p : `ppt/${p}`))
+    .map((rid) => (rid ? rels.get(rid) : undefined))
+    .filter((rel): rel is PartRel => Boolean(rel && rel.mode !== 'External'))
+    .map((rel) => (rel.target.startsWith('ppt/') ? rel.target : `ppt/${rel.target}`))
   const paths = slidePaths.length
     ? slidePaths
     : pkg.paths()
@@ -124,9 +124,10 @@ export async function importPPTXDetailed(file: File): Promise<ImportResult> {
         elements,
         background: background ?? ancestry.background ?? { type: 'solid', color: '#ffffff' },
       })
-    } catch {
+    } catch (e) {
       // 单页失败不拖垮整个导入：计入报告后继续下一页
-      report.skipped['slideParseFailed'] = (report.skipped['slideParseFailed'] ?? 0) + 1
+      console.warn('[pptx-import] 页面解析失败:', slidePath, e)
+      addSkipped(report, 'slideParseFailed')
     }
   }
   if (!slides.length) throw new Error('PPTX 中没有可解析的幻灯片')

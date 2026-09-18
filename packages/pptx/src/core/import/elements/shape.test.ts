@@ -91,6 +91,31 @@ describe('parseShapeEl', () => {
     expect(result.color).toBe('#4472C4')
   })
 
+  it('带边框透明矩形（noFill + ln + txBody）判为形状并保留 outline', async () => {
+    const xml = `<?xml version="1.0"?>
+<p:sld xmlns:p="urn:p" xmlns:a="urn:a"><p:cSld><p:spTree>
+  <p:sp>
+    <p:nvSpPr><p:cNvPr id="2" name="Bordered Box"/></p:nvSpPr>
+    <p:spPr>
+      <a:xfrm><a:off x="0" y="0"/><a:ext cx="1905000" cy="952500"/></a:xfrm>
+      <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+      <a:noFill/>
+      <a:ln w="12700"><a:solidFill><a:srgbClr val="333333"/></a:solidFill></a:ln>
+    </p:spPr>
+    <p:txBody><a:bodyPr/><a:p><a:r><a:rPr lang="zh-CN"/><a:t>边框内文字</a:t></a:r></a:p></p:txBody>
+  </p:sp>
+</p:spTree></p:cSld></p:sld>`
+    const { pkg, ctx } = await makeCtx(xml)
+    const sp = el(xml).getElementsByTagName('p:sp')[0]
+    const result = await parseShapeEl(sp, ctx, IDENTITY_XFORM, pkg)
+    if (result?.type !== 'shape') throw new Error('expected shape')
+    // 透明填充 + 边框保留
+    expect(result.fill).toBe('#00000000')
+    expect(result.outline?.color).toBe('#333333')
+    expect(result.outline?.width).toBeGreaterThanOrEqual(1)
+    expect(result.text).toContain('边框内文字')
+  })
+
   it('占位符继承：无 xfrm 时从 placeholders 取位置折算 px', async () => {
     const xml = `<?xml version="1.0"?>
 <p:sld xmlns:p="urn:p" xmlns:a="urn:a"><p:cSld><p:spTree>

@@ -707,7 +707,7 @@ function ElementSection({ el }: { el: PPTElement }) {
           <Field label="形状">
             <SelectInput
               value={el.shapeKey}
-              onChange={(v) => pushThen(() => useEditorStore.getState().updateElements([el.id], (d) => { if (d.type === 'shape') d.shapeKey = v }))}
+              onChange={(v) => pushThen(() => useEditorStore.getState().updateElements([el.id], (d) => { if (d.type === 'shape') { d.shapeKey = v; d.path = undefined } }))}
               options={Object.entries(SHAPE_PATHS).map(([key, meta]) => ({ value: key, label: meta.name }))}
             />
           </Field>

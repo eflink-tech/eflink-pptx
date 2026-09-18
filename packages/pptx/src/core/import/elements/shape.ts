@@ -128,8 +128,8 @@ export async function parseShapeEl(
     return line
   }
 
-  // 纯文本框：rect/textbox 且无填充（noFill 视为无填充，与旧实现兼容）
-  if (node.nodeName === 'p:sp' && (prst === 'rect' || prst === 'textbox' || (!prst && !custGeom)) && txBody && !solidFill && !gradFill) {
+  // 纯文本框：rect/textbox 且无填充无边框（noFill 视为无填充，与旧实现兼容；带 a:ln 的走形状分支保留 outline）
+  if (node.nodeName === 'p:sp' && (prst === 'rect' || prst === 'textbox' || (!prst && !custGeom)) && txBody && !solidFill && !gradFill && !ln) {
     const body = await txBodyToHTML(txBody, ctx.theme, pkg, ctx.partPath)
     const text: TextElement = {
       id: genId('t-'), type: 'text', x, y, w, h,
