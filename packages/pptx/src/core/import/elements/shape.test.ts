@@ -116,6 +116,33 @@ describe('parseShapeEl', () => {
     expect(result.text).toContain('边框内文字')
   })
 
+  it('形状文本剥标签后解码实体：空段 &nbsp; 不残留、转义字符还原', async () => {
+    const xml = `<?xml version="1.0"?>
+<p:sld xmlns:p="urn:p" xmlns:a="urn:a"><p:cSld><p:spTree>
+  <p:sp>
+    <p:nvSpPr><p:cNvPr id="2" name="Entity Box"/></p:nvSpPr>
+    <p:spPr>
+      <a:xfrm><a:off x="0" y="0"/><a:ext cx="1905000" cy="952500"/></a:xfrm>
+      <a:prstGeom prst="roundRect"><a:avLst/></a:prstGeom>
+      <a:solidFill><a:srgbClr val="00AA66"/></a:solidFill>
+    </p:spPr>
+    <p:txBody><a:bodyPr/>
+      <a:p><a:endParaRPr/></a:p>
+      <a:p><a:r><a:rPr lang="zh-CN" sz="1800"/><a:t>卡卡 &amp; KK &lt;202X&gt;</a:t></a:r></a:p>
+      <a:p><a:endParaRPr/></a:p>
+    </p:txBody>
+  </p:sp>
+</p:spTree></p:cSld></p:sld>`
+    const { pkg, ctx } = await makeCtx(xml)
+    const sp = el(xml).getElementsByTagName('p:sp')[0]
+    const result = await parseShapeEl(sp, ctx, IDENTITY_XFORM, pkg)
+    if (result?.type !== 'shape') throw new Error('expected shape')
+    expect(result.text).toBe('卡卡 & KK <202X>')
+    expect(result.text).not.toContain('&nbsp;')
+    expect(result.text).not.toContain('&amp;')
+    expect(result.text).not.toContain('&lt;')
+  })
+
   it('占位符继承：无 xfrm 时从 placeholders 取位置折算 px', async () => {
     const xml = `<?xml version="1.0"?>
 <p:sld xmlns:p="urn:p" xmlns:a="urn:a"><p:cSld><p:spTree>

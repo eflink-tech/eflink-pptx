@@ -174,9 +174,12 @@ export async function parseShapeEl(
   // 形状内文本（首段样式近似）
   if (txBody) {
     const body = await txBodyToHTML(txBody, ctx.theme, pkg, ctx.partPath)
-    const plain = body.html
+    // HTML → 纯文本：剥标签后须清理空段填充的 &nbsp; 并解码其余实体（escapeHTML 的 &amp;/&lt;/&gt; 等），
+    // 否则画布按纯文本渲染会字面显示 "&nbsp;"；空行折叠 + trim 后保留段间换行（渲染层 whitespace-pre-wrap）
+    const plain = decodeHTMLText(body.html
       .replace(/<li[^>]*>/g, '\n').replace(/<p[^>]*>/g, '\n')
-      .replace(/<[^>]+>/g, '').replace(/\n{2,}/g, '\n').trim()
+      .replace(/<[^>]+>/g, '')
+      .replace(/&nbsp;/g, '')).replace(/\n{2,}/g, '\n').trim()
     if (plain) {
       shape.text = plain
       const firstRun = firstDescendant(txBody, 'a:r')
@@ -197,4 +200,10 @@ export async function parseShapeEl(
 /** 未识别的 shape 特性统一在此报告 */
 export function skipShape(ctx: ParseContext, reason: string): void {
   addSkipped(ctx.report, reason)
+}
+
+/** 解码 HTML 实体（&amp;/&lt;/&gt;/&quot;/&#39; 等）：借助 text/html 解析器的文本语义 */
+function decodeHTMLText(s: string): string {
+  const doc = new DOMParser().parseFromString(s, 'text/html')
+  return doc.documentElement.textContent ?? s
 }
