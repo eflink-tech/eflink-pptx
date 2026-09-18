@@ -144,6 +144,8 @@ export interface ShapeElement extends ElementBase {
   type: 'shape'
   /** 预设形状 key（见 core/render/shape.ts SHAPE_PATHS） */
   shapeKey: string
+  /** 自定义几何 SVG 路径（custGeom 导入产出；设置后渲染优先于 shapeKey 预设路径，坐标为 0-100 视口空间） */
+  path?: string
   fill?: string | Gradient
   pattern?: string
   outline?: { color: string; width: number; style: string }
@@ -378,6 +380,13 @@ export interface Presentation {
   /** 画布宽度 px（高度 = width / viewportRatio） */
   width: number
   viewportRatio: number
+}
+
+/* ---------- 导入兼容性报告 ---------- */
+
+/** PPTX 导入兼容性报告：skipped 记录各类被降级/丢弃项的计数 */
+export interface ImportReport {
+  skipped: Record<string, number>
 }
 
 /* ---------- 创建空演示文稿 ---------- */
