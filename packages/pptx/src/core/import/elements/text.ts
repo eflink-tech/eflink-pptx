@@ -32,7 +32,47 @@ function bulletKind(p: Element): 'none' | 'bullet' | 'number' {
   return 'none'
 }
 
-async function paragraphToInner(p: Element, theme: PptxTheme, pkg: PptxPackage | undefined, partPath: string): Promise<string> {
+/** run 字符样式提取：rPr 显式属性优先，缺失时回退 lstStyle defRPr（同级默认字符样式）。
+ * 属性分两类：字号/粗斜下划线/字距在元素属性上，颜色/字体在子元素上，两类均按 rPr → defRPr 回退。 */
+function runStyles(rPr: Element | null, defRPr: Element | null, theme: PptxTheme): string[] {
+  const styles: string[] = []
+  const attrOf = (name: string): string | null =>
+    (rPr ? attr(rPr, name) : null) ?? (defRPr ? attr(defRPr, name) : null)
+  const sz = attrOf('sz')
+  if (sz) styles.push(`font-size:${Math.round(parseInt(sz, 10) / 100 / 0.75)}px`)
+  if (attrOf('b') === '1') styles.push('font-weight:bold')
+  if (attrOf('i') === '1') styles.push('font-style:italic')
+  if (attrOf('u') === 'sng') styles.push('text-decoration:underline')
+  if (attrOf('strike') === 'sng') styles.push('text-decoration:line-through')
+  const spc = attrOf('spc')
+  if (spc) {
+    // 字距 1/100 pt → px（与 font-size 同源换算），保留两位小数防浮点噪声
+    const ls = Math.round((parseInt(spc, 10) / 100 / 0.75) * 100) / 100
+    styles.push(`letter-spacing:${ls}px`)
+  }
+  const fill = (rPr ? directChild(rPr, 'a:solidFill') : null) ?? (defRPr ? directChild(defRPr, 'a:solidFill') : null)
+  const color = resolveColor(fill, theme)
+  if (color) styles.push(`color:${color}`)
+  // 字体栈：latin + ea（含 +mj/+mn 主题引用），中文回退栈兜底；字体名来自不可信属性，fontStackOf 内已剔除引号防注入
+  const latin = ((rPr ? directChild(rPr, 'a:latin') : null) ?? (defRPr ? directChild(defRPr, 'a:latin') : null))
+  const ea = ((rPr ? directChild(rPr, 'a:ea') : null) ?? (defRPr ? directChild(defRPr, 'a:ea') : null))
+  if (attr(latin, 'typeface') || attr(ea, 'typeface')) {
+    styles.push(`font-family:${fontStackOf(attr(latin, 'typeface'), attr(ea, 'typeface'), theme)}`)
+  }
+  return styles
+}
+
+/** lstStyle → 段落级别对应的默认字符样式（a:lvl{N}pPr > a:defRPr，未命中级别时回退 a:defPPr） */
+export function defRPrOf(lst: Element | null, lvl: number): Element | null {
+  if (!lst) return null
+  const lvlPr = directChild(lst, `a:lvl${lvl + 1}pPr`) ?? directChild(lst, 'a:defPPr')
+  return lvlPr ? directChild(lvlPr, 'a:defRPr') : null
+}
+
+async function paragraphToInner(p: Element, theme: PptxTheme, pkg: PptxPackage | undefined, partPath: string, lst: Element | null): Promise<string> {
+  const pPr = directChild(p, 'a:pPr')
+  const lvlRaw = parseInt(attr(pPr, 'lvl') ?? '0', 10)
+  const defRPr = defRPrOf(lst, Number.isFinite(lvlRaw) ? lvlRaw : 0)
   let inner = ''
   for (const node of Array.from(p.children)) {
     if (node.nodeName === 'a:br') {
@@ -45,27 +85,7 @@ async function paragraphToInner(p: Element, theme: PptxTheme, pkg: PptxPackage |
     const text = t?.textContent ?? ''
     if (!text) continue
     const rPr = firstDescendant(node, 'a:rPr')
-    const styles: string[] = []
-    if (rPr) {
-      const sz = attr(rPr, 'sz')
-      if (sz) styles.push(`font-size:${Math.round(parseInt(sz, 10) / 100 / 0.75)}px`)
-      if (attr(rPr, 'b') === '1') styles.push('font-weight:bold')
-      if (attr(rPr, 'i') === '1') styles.push('font-style:italic')
-      if (attr(rPr, 'u') === 'sng') styles.push('text-decoration:underline')
-      if (attr(rPr, 'strike') === 'sng') styles.push('text-decoration:line-through')
-      const spc = attr(rPr, 'spc')
-      if (spc) {
-        // 字距 1/100 pt → px（与 font-size 同源换算），保留两位小数防浮点噪声
-        const ls = Math.round((parseInt(spc, 10) / 100 / 0.75) * 100) / 100
-        styles.push(`letter-spacing:${ls}px`)
-      }
-      const color = resolveColor(directChild(rPr, 'a:solidFill'), theme)
-      if (color) styles.push(`color:${color}`)
-      // 字体栈：latin + ea（含 +mj/+mn 主题引用），中文回退栈兜底；字体名来自不可信属性，fontStackOf 内已剔除引号防注入
-      const latin = attr(directChild(rPr, 'a:latin'), 'typeface')
-      const ea = attr(directChild(rPr, 'a:ea'), 'typeface')
-      if (latin || ea) styles.push(`font-family:${fontStackOf(latin, ea, theme)}`)
-    }
+    const styles = runStyles(rPr, defRPr, theme)
     const styleAttr = styles.length ? ` style="${styles.join(';')}"` : ''
     let run = `<span${styleAttr}>${escapeHTML(text)}</span>`
     // 超链接：a:hlinkClick@r:id → rels（External，仅放行 http/https/mailto 白名单协议）；无包上下文时跳过
@@ -101,7 +121,7 @@ export async function txBodyToHTML(
     const pPr = directChild(p, 'a:pPr')
     const algn = attr(pPr, 'algn')
     const align = algn === 'ctr' ? 'center' : algn === 'r' ? 'right' : algn === 'just' ? 'justify' : 'left'
-    const inner = await paragraphToInner(p, theme, pkg, partPath)
+    const inner = await paragraphToInner(p, theme, pkg, partPath, directChild(txBody, 'a:lstStyle'))
     // 行距：spcPct（1/100000 → 倍数）优先，spcPts（1/100 pt → px）覆盖；val 非法/非正数时跳过，避免产出 line-height:0 压扁文字
     const lnSpc = pPr ? directChild(pPr, 'a:lnSpc') : null
     let spacing = ''

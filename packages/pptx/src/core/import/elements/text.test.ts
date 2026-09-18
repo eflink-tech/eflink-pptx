@@ -102,6 +102,50 @@ describe('txBodyToHTML', () => {
     expect(r.html).toContain('font-size:24px')
   })
 
+  it('lstStyle lvl1pPr defRPr 作为 run 无显式样式时的默认值', async () => {
+    const txBody = el(`<p:txBody xmlns:p="urn:p" xmlns:a="urn:a">
+      <a:bodyPr/>
+      <a:lstStyle>
+        <a:lvl1pPr><a:defRPr sz="1600"><a:solidFill><a:schemeClr val="bg2"><a:lumMod val="25000"/></a:schemeClr></a:solidFill>
+          <a:latin typeface="阿里巴巴普惠体"/><a:ea typeface="阿里巴巴普惠体"/></a:defRPr>
+        </a:lvl1pPr>
+      </a:lstStyle>
+      <a:p><a:r><a:t>默认样式</a:t></a:r></a:p>
+    </p:txBody>`)
+    const r = await txBodyToHTML(txBody, theme)
+    expect(r.html).toContain('默认样式')
+    expect(r.html).toContain('font-size:21px') // 1600/100/0.75 = 21.33 → 21
+    expect(r.html).toContain('font-family:')
+    expect(r.html).toContain('阿里巴巴普惠体')
+  })
+
+  it('run rPr 显式属性优先于 lstStyle 默认值', async () => {
+    const txBody = el(`<p:txBody xmlns:p="urn:p" xmlns:a="urn:a">
+      <a:bodyPr/>
+      <a:lstStyle>
+        <a:lvl1pPr><a:defRPr sz="1600"><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></a:defRPr></a:lvl1pPr>
+      </a:lstStyle>
+      <a:p><a:r><a:rPr sz="3200"><a:solidFill><a:srgbClr val="00FF00"/></a:solidFill></a:rPr><a:t>覆盖</a:t></a:r></a:p>
+    </p:txBody>`)
+    const r = await txBodyToHTML(txBody, theme)
+    expect(r.html).toContain('font-size:43px') // 3200/100/0.75 = 42.67 → 43
+    expect(r.html).toContain('color:#00FF00')
+    expect(r.html).not.toContain('color:#FF0000')
+  })
+
+  it('lstStyle 按段落 lvl 选取对应级别默认值', async () => {
+    const txBody = el(`<p:txBody xmlns:p="urn:p" xmlns:a="urn:a">
+      <a:bodyPr/>
+      <a:lstStyle>
+        <a:lvl1pPr><a:defRPr sz="1600"/></a:lvl1pPr>
+        <a:lvl2pPr><a:defRPr sz="2800"/></a:lvl2pPr>
+      </a:lstStyle>
+      <a:p><a:pPr lvl="1"/><a:r><a:t>二级</a:t></a:r></a:p>
+    </p:txBody>`)
+    const r = await txBodyToHTML(txBody, theme)
+    expect(r.html).toContain('font-size:37px') // 2800/100/0.75 = 37.33 → 37
+  })
+
   it('超链接 External：白名单协议产出 <a href>', async () => {
     const pkg = await makePkg('https://example.com')
     const txBody = el(`<p:txBody xmlns:p="urn:p" xmlns:a="urn:a" xmlns:r="urn:r">

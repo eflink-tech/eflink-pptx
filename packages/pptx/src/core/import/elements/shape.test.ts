@@ -167,6 +167,31 @@ describe('parseShapeEl', () => {
     expect(result.defaultColor).toBe('#FFFFFF')
   })
 
+  it('形状文本首 run 无 rPr 时回退 lstStyle defRPr 默认样式；首 run 为 a:fld 也可取样式', async () => {
+    const xml = `<?xml version="1.0"?>
+<p:sld xmlns:p="urn:p" xmlns:a="urn:a"><p:cSld><p:spTree>
+  <p:sp>
+    <p:nvSpPr><p:cNvPr id="2" name="Default Style"/></p:nvSpPr>
+    <p:spPr>
+      <a:xfrm><a:off x="0" y="0"/><a:ext cx="1905000" cy="952500"/></a:xfrm>
+      <a:prstGeom prst="roundRect"><a:avLst/></a:prstGeom>
+      <a:solidFill><a:srgbClr val="00AA66"/></a:solidFill>
+    </p:spPr>
+    <p:txBody><a:bodyPr/>
+      <a:lstStyle><a:lvl1pPr><a:defRPr sz="1600"><a:solidFill><a:srgbClr val="112233"/></a:solidFill></a:defRPr></a:lvl1pPr></a:lstStyle>
+      <a:p><a:fld id="{GUID}" type="slidenum"><a:t>1</a:t></a:fld></a:p>
+    </p:txBody>
+  </p:sp>
+</p:spTree></p:cSld></p:sld>`
+    const { pkg, ctx } = await makeCtx(xml)
+    const sp = el(xml).getElementsByTagName('p:sp')[0]
+    const result = await parseShapeEl(sp, ctx, IDENTITY_XFORM, pkg)
+    if (result?.type !== 'shape') throw new Error('expected shape')
+    expect(result.text).toBe('1')
+    expect(result.defaultColor).toBe('#112233')
+    expect(result.fontSize).toBe(21)
+  })
+
   it('占位符继承：无 xfrm 时从 placeholders 取位置折算 px', async () => {
     const xml = `<?xml version="1.0"?>
 <p:sld xmlns:p="urn:p" xmlns:a="urn:a"><p:cSld><p:spTree>
