@@ -63,6 +63,7 @@ export function geomOf(node: Element, ctx: PreviewCtx): Box | null {
       flipV: attr(xfrm, 'flipV') === '1',
     }
   }
+  // xfrm 存在但缺 off/ext 时有意走占位符回退：畸形 xfrm 回退占位符而非直接丢弃元素（保守处理）
   const ph = firstDescendant(firstDescendant(node, 'p:nvSpPr') ?? node, 'p:ph')
   if (ph) {
     const key = attr(ph, 'idx') ?? attr(ph, 'type') ?? ''
@@ -77,18 +78,20 @@ export function geomOf(node: Element, ctx: PreviewCtx): Box | null {
   return null
 }
 
-/** 元素变换属性串：flip（绕自身包围盒翻转）+ rot（绕自身中心）。无变换返回 undefined。 */
+/** 元素变换属性串：flip（绕自身包围盒翻转）+ rot（绕自身中心）。无变换返回 undefined。
+ * SVG transform 串 `A B` 矩阵为 A×B（右侧先作用）；OOXML 语义是先翻转（形状自身坐标）后旋转，
+ * 即 p' = R·F·p，因此 rotate 必须排在 flip 之前。 */
 export function boxTransform(box: Box): string | undefined {
   const parts: string[] = []
+  if (box.rot) {
+    parts.push(`rotate(${box.rot},${box.x + box.w / 2},${box.y + box.h / 2})`)
+  }
   if (box.flipH || box.flipV) {
     const fx = box.flipH ? -1 : 1
     const fy = box.flipV ? -1 : 1
     parts.push(
       `translate(${box.x + (fx < 0 ? box.w : 0)},${box.y + (fy < 0 ? box.h : 0)}) scale(${fx},${fy}) translate(${-box.x},${-box.y})`,
     )
-  }
-  if (box.rot) {
-    parts.push(`rotate(${box.rot},${box.x + box.w / 2},${box.y + box.h / 2})`)
   }
   return parts.length ? parts.join(' ') : undefined
 }

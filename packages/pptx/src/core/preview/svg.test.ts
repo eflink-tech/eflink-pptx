@@ -75,4 +75,9 @@ describe('preview/svg 助手', () => {
     expect(t2).toBe('translate(600,100) scale(-1,1) translate(-100,-100)')
     expect(boxTransform({ x: 0, y: 0, w: 10, h: 10, rot: 0, flipH: false, flipV: false })).toBeUndefined()
   })
+
+  it('boxTransform：flip+rot 组合时 rotate 在前（先翻转后旋转，p\'=R·F·p）', () => {
+    const t = boxTransform({ x: 100, y: 100, w: 500, h: 100, rot: 30, flipH: true, flipV: false })
+    expect(t).toBe('rotate(30,350,150) translate(600,100) scale(-1,1) translate(-100,-100)')
+  })
 })
