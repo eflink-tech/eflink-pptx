@@ -1,4 +1,4 @@
-// 本地多文档管理（Dexie / IndexedDB）
+// 本地多文档存储（Dexie / IndexedDB）
 import Dexie, { type Table } from 'dexie'
 import type { Presentation } from '../types/slides'
 
