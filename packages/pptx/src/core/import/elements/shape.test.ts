@@ -90,4 +90,28 @@ describe('parseShapeEl', () => {
     expect(result.lineWidth).toBe(2)
     expect(result.color).toBe('#4472C4')
   })
+
+  it('占位符继承：无 xfrm 时从 placeholders 取位置折算 px', async () => {
+    const xml = `<?xml version="1.0"?>
+<p:sld xmlns:p="urn:p" xmlns:a="urn:a"><p:cSld><p:spTree>
+  <p:sp>
+    <p:nvSpPr><p:cNvPr id="2" name="Title"/><p:nvPr><p:ph type="title"/></p:nvPr></p:nvSpPr>
+    <p:spPr>
+      <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+      <a:solidFill><a:srgbClr val="FF0000"/></a:solidFill>
+    </p:spPr>
+    <p:txBody><a:bodyPr/><a:p><a:endParaRPr/></a:p></p:txBody>
+  </p:sp>
+</p:spTree></p:cSld></p:sld>`
+    const { pkg, ctx } = await makeCtx(xml)
+    ctx.placeholders.set('title', { x: 952500, y: 952500, w: 4762500, h: 952500 })
+    const sp = el(xml).getElementsByTagName('p:sp')[0]
+    const result = await parseShapeEl(sp, ctx, IDENTITY_XFORM, pkg)
+    if (result?.type !== 'shape') throw new Error('expected shape')
+    // scale {x:1,y:1} 时 px = EMU / 9525
+    expect(result.x).toBe(100)
+    expect(result.y).toBe(100)
+    expect(result.w).toBe(500)
+    expect(result.h).toBe(100)
+  })
 })

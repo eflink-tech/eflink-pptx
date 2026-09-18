@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import JSZip from 'jszip'
 import { txBodyToHTML } from './text'
+import { PptxPackage } from '../package'
 import type { PptxTheme } from '../theme'
 
 const theme: PptxTheme = {
@@ -59,4 +61,46 @@ describe('txBodyToHTML', () => {
     const r = await txBodyToHTML(txBody, theme)
     expect(r.html).toContain('<p')
   })
+
+  it('typeface 含引号时转义，不逃逸 style 属性', async () => {
+    const txBody = el(`<p:txBody xmlns:p="urn:p" xmlns:a="urn:a">
+      <a:bodyPr/>
+      <a:p><a:r><a:rPr><a:latin typeface="x&quot; onmouseover=&quot;alert(1)"/></a:rPr><a:t>恶意</a:t></a:r></a:p>
+    </p:txBody>`)
+    const r = await txBodyToHTML(txBody, theme)
+    // 引号必须转义为 &quot;，不允许出现未转义的属性逃逸
+    expect(r.html).toContain('&quot;')
+    expect(r.html).not.toMatch(/onmouseover="/)
+  })
+
+  it('超链接 External：白名单协议产出 <a href>', async () => {
+    const pkg = await makePkg('https://example.com')
+    const txBody = el(`<p:txBody xmlns:p="urn:p" xmlns:a="urn:a" xmlns:r="urn:r">
+      <a:bodyPr/>
+      <a:p><a:r><a:rPr><a:hlinkClick r:id="rId1"/></a:rPr><a:t>链接</a:t></a:r></a:p>
+    </p:txBody>`)
+    const r = await txBodyToHTML(txBody, theme, pkg, 'ppt/slides/slide1.xml')
+    expect(r.html).toContain('<a href="https://example.com">')
+  })
+
+  it('超链接 External：非白名单协议（javascript:）回退为 span，不产出 href', async () => {
+    const pkg = await makePkg('javascript:alert(1)')
+    const txBody = el(`<p:txBody xmlns:p="urn:p" xmlns:a="urn:a" xmlns:r="urn:r">
+      <a:bodyPr/>
+      <a:p><a:r><a:rPr><a:hlinkClick r:id="rId1"/></a:rPr><a:t>恶意</a:t></a:r></a:p>
+    </p:txBody>`)
+    const r = await txBodyToHTML(txBody, theme, pkg, 'ppt/slides/slide1.xml')
+    expect(r.html).not.toContain('href')
+  })
 })
+
+/** 构造含 slide1.xml 与 External 超链接 rels 的真实包 */
+async function makePkg(linkTarget: string): Promise<PptxPackage> {
+  const zip = new JSZip()
+  zip.file('ppt/slides/slide1.xml', '<p:sld xmlns:p="urn:p"/>')
+  zip.file('ppt/slides/_rels/slide1.xml.rels', `<?xml version="1.0"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="${linkTarget}" TargetMode="External"/>
+</Relationships>`)
+  return PptxPackage.load(await zip.generateAsync({ type: 'blob' }))
+}

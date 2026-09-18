@@ -29,7 +29,7 @@ function bulletKind(p: Element): 'none' | 'bullet' | 'number' {
   return 'none'
 }
 
-async function paragraphToInner(p: Element, theme: PptxTheme, pkg: PptxPackage, partPath: string): Promise<string> {
+async function paragraphToInner(p: Element, theme: PptxTheme, pkg: PptxPackage | undefined, partPath: string): Promise<string> {
   let inner = ''
   for (const node of Array.from(p.children)) {
     if (node.nodeName === 'a:br') {
@@ -53,17 +53,19 @@ async function paragraphToInner(p: Element, theme: PptxTheme, pkg: PptxPackage, 
       if (color) styles.push(`color:${color}`)
       const latin = directChild(rPr, 'a:latin')
       const typeface = attr(latin, 'typeface')
-      if (typeface && !typeface.startsWith('+')) styles.push(`font-family:${typeface}`)
+      // typeface 来自不可信文件属性，转义防止逃逸 style 属性注入
+      if (typeface && !typeface.startsWith('+')) styles.push(`font-family:${escapeHTML(typeface)}`)
     }
     const styleAttr = styles.length ? ` style="${styles.join(';')}"` : ''
     let run = `<span${styleAttr}>${escapeHTML(text)}</span>`
-    // 超链接：a:hlinkClick@r:id → rels（External）；无包上下文时跳过
+    // 超链接：a:hlinkClick@r:id → rels（External，仅放行 http/https/mailto 白名单协议）；无包上下文时跳过
     const hlink = rPr ? directChild(rPr, 'a:hlinkClick') : null
     const hlinkId = attr(hlink, 'r:id')
-    if (hlinkId && pkg && typeof pkg.rels === 'function') {
+    if (hlinkId && pkg) {
       const rel = (await pkg.rels(partPath)).get(hlinkId)
-      if (rel && rel.mode === 'External') {
-        run = `<a href="${escapeHTML(rel.target)}"${styleAttr}>${escapeHTML(text)}</a>`
+      const safeTarget = rel?.mode === 'External' && /^(https?:|mailto:)/i.test(rel.target) ? rel.target : null
+      if (safeTarget) {
+        run = `<a href="${escapeHTML(safeTarget)}"${styleAttr}>${escapeHTML(text)}</a>`
       }
     }
     inner += run
@@ -89,7 +91,7 @@ export async function txBodyToHTML(
     const pPr = directChild(p, 'a:pPr')
     const algn = attr(pPr, 'algn')
     const align = algn === 'ctr' ? 'center' : algn === 'r' ? 'right' : algn === 'just' ? 'justify' : 'left'
-    const inner = await paragraphToInner(p, theme, pkg ?? ({} as PptxPackage), partPath)
+    const inner = await paragraphToInner(p, theme, pkg, partPath)
     paras.push({ align, kind: bulletKind(p), inner })
   }
 

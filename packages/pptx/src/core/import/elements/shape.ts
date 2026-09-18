@@ -52,7 +52,7 @@ function dashOf(ln: Element | null): 'solid' | 'dashed' | 'dotted' {
   return 'solid'
 }
 
-function arrowOf(end: Element | null): string {
+function arrowOf(end: Element | null): LineElement['startArrow'] {
   const type = attr(end, 'type')
   if (type === 'triangle' || type === 'stealth') return 'triangle'
   if (type === 'arrow') return 'arrow'
@@ -121,8 +121,8 @@ export async function parseShapeEl(
       color: resolveColor(ln ? directChild(ln, 'a:solidFill') : solidFill, ctx.theme) ?? '#333333',
       lineWidth: Math.max(1, Math.round(emu2px(parseInt(attr(ln, 'w') ?? '12700', 10)))),
       lineStyle: dashOf(ln),
-      startArrow: arrowOf(ln ? directChild(ln, 'a:headEnd') : null) as LineElement['startArrow'],
-      endArrow: arrowOf(ln ? directChild(ln, 'a:tailEnd') : null) as LineElement['endArrow'],
+      startArrow: arrowOf(ln ? directChild(ln, 'a:headEnd') : null),
+      endArrow: arrowOf(ln ? directChild(ln, 'a:tailEnd') : null),
       name: '线条',
     }
     return line
