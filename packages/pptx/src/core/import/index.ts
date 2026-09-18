@@ -50,7 +50,7 @@ export async function listSlidePaths(
   if (!presXml) throw new Error('不是有效的 PPTX 文件（缺少 presentation.xml）')
   const root = parseXML(presXml).documentElement
 
-  // 幻灯片尺寸（EMU）→ 1280 宽目标画布的缩放系数
+  // 幻灯片尺寸（EMU）→ 源画布尺寸与宽高比
   const sldSz = firstDescendant(root, 'p:sldSz')
   const srcW = parseInt(attr(sldSz, 'cx') ?? '12192000', 10)
   const srcH = parseInt(attr(sldSz, 'cy') ?? '6858000', 10)

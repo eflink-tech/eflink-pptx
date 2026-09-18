@@ -21,7 +21,10 @@ export async function previewPPTXDetailed(file: File): Promise<PreviewResult> {
     try {
       const page = await renderSlide(pkg, paths[i], srcW, srcH, i, report)
       if (page) pages.push(page)
-      else addSkipped(report, 'slideParseFailed')
+      else {
+        console.warn('[pptx-preview] 页面部件缺失:', paths[i])
+        addSkipped(report, 'slideParseFailed')
+      }
     } catch (e) {
       // 单页失败不拖垮整个预览：计入报告后继续下一页
       console.warn('[pptx-preview] 页面渲染失败:', paths[i], e)

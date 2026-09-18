@@ -123,12 +123,33 @@ describe('previewPPTX', () => {
   it('坏页容错：畸形第二页计入 slideParseFailed 不中断', async () => {
     const { pages, report } = await previewPPTXDetailed(await buildTwoSlidesOneBroken())
     expect(pages).toHaveLength(1)
-    expect(report.skipped.slideParseFailed).toBe(1)
+    expect(report.skipped).toEqual({ slideParseFailed: 1 })
   })
 
   it('非 pptx → 明确中文错误', async () => {
     const zip = new JSZip()
     const file = new File([await zip.generateAsync({ type: 'blob' })], 'empty.pptx')
     await expect(previewPPTXDetailed(file)).rejects.toThrow('缺少 presentation.xml')
+  })
+
+  it('sldIdLst 为空且无 slide 部件 → 抛「没有幻灯片」中文错误', async () => {
+    const zip = new JSZip()
+    zip.file('[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>
+</Types>`)
+    zip.file('_rels/.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/>
+</Relationships>`)
+    zip.file('ppt/presentation.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <p:sldIdLst/>
+  <p:sldSz cx="12192000" cy="6858000"/>
+</p:presentation>`)
+    const file = new File([await zip.generateAsync({ type: 'blob' })], 'no-slides.pptx')
+    await expect(previewPPTXDetailed(file)).rejects.toThrow('没有幻灯片')
   })
 })
