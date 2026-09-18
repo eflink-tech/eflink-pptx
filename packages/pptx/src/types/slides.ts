@@ -109,6 +109,8 @@ export interface TextElement extends ElementBase {
   vertical?: boolean
   /** 自动收缩字号以适应容器 */
   autoSize?: boolean
+  /** 框随文本（源 spAutoFit）：内容超高时溢出显示而非裁剪，与 PowerPoint 文本框行为一致 */
+  autoFit?: boolean
   /** 内边距（px） */
   padding?: number
   outline?: { color: string; width: number; style: string }

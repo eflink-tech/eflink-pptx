@@ -39,6 +39,23 @@ describe('txBodyToHTML', () => {
     expect(r.vertical).toBe(true)
   })
 
+  it('bodyPr insets 折算 padding；spAutoFit → autoFitShape', async () => {
+    // 四边 0（常见于设计稿导出）：无内边距，且框随文本增高
+    const zero = await txBodyToHTML(el(`<p:txBody xmlns:p="urn:p" xmlns:a="urn:a">
+      <a:bodyPr lIns="0" tIns="0" rIns="0" bIns="0"><a:spAutoFit/></a:bodyPr>
+      <a:p><a:r><a:t>零边距</a:t></a:r></a:p>
+    </p:txBody>`), theme)
+    expect(zero.padding).toBe(0)
+    expect(zero.autoFitShape).toBe(true)
+    // 缺省 insets：OOXML 默认 tIns/bIns=45720 → (45720+45720)/2/9525 = 4.8 → 5
+    const def = await txBodyToHTML(el(`<p:txBody xmlns:p="urn:p" xmlns:a="urn:a">
+      <a:bodyPr/>
+      <a:p><a:r><a:t>默认</a:t></a:r></a:p>
+    </p:txBody>`), theme)
+    expect(def.padding).toBe(5)
+    expect(def.autoFitShape).toBe(false)
+  })
+
   it('项目符号段落聚合为 ul；编号聚合为 ol', async () => {
     const txBody = el(`<p:txBody xmlns:p="urn:p" xmlns:a="urn:a">
       <a:bodyPr/>

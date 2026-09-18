@@ -1,9 +1,10 @@
 // 左侧幻灯片缩略图面板：选择/排序/右键菜单
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useEditorStore } from '../../store/editorStore'
 import { SlideRenderer } from '../canvas/SlideRenderer'
 
-const THUMB_WIDTH = 168
+/** 页码列 16px + 项间距 6px + 选中边框 4px + 内边距 4px */
+const THUMB_RESERVED = 30
 
 export function ThumbnailPanel() {
   const presentation = useEditorStore((s) => s.presentation)
@@ -12,9 +13,22 @@ export function ThumbnailPanel() {
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   /** 当前拖拽悬停的目标索引（用于显示插入指示线） */
   const [dropIndex, setDropIndex] = useState<number | null>(null)
+  const listRef = useRef<HTMLDivElement>(null)
+  /** 缩略图宽度随列表可用宽自适应（默认 168）：垂直滚动条出现会挤压列表内容宽，
+   * 固定宽会溢出面板被画布遮挡，故用 ResizeObserver 跟随 clientWidth 收缩 */
+  const [thumbW, setThumbW] = useState(168)
+  useEffect(() => {
+    const node = listRef.current
+    if (!node) return
+    const update = () => setThumbW(Math.max(96, node.clientWidth - THUMB_RESERVED))
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(node)
+    return () => ro.disconnect()
+  }, [])
 
   const ratio = presentation.viewportRatio
-  const thumbH = Math.round(THUMB_WIDTH / ratio)
+  const thumbH = Math.round(thumbW / ratio)
 
   /**
    * 计算放置下后的目标索引。
@@ -57,7 +71,7 @@ export function ThumbnailPanel() {
           ＋
         </button>
       </div>
-      <div className="flex-1 space-y-2 overflow-y-auto pb-4">
+      <div ref={listRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto pb-4">
         {presentation.slides.map((slide, index) => (
           <div key={slide.id} className="relative flex items-center gap-1.5">
             {/* 拖拽插入指示线（上） */}
@@ -66,7 +80,7 @@ export function ThumbnailPanel() {
             )}
             <span className="w-4 shrink-0 text-right text-[10px] text-gray-400">{index + 1}</span>
             <div
-              className={`group relative flex-1 cursor-pointer rounded-md border-2 p-0.5 transition-colors ${
+              className={`group relative min-w-0 flex-1 cursor-pointer rounded-md border-2 p-0.5 transition-colors ${
                 index === slideIndex ? 'border-[#d14424]' : 'border-transparent hover:border-gray-300'
               } ${dragIndex === index ? 'opacity-40' : ''}`}
               draggable
@@ -92,8 +106,8 @@ export function ThumbnailPanel() {
               data-testid={`thumb-${index}`}
             >
               <div className="overflow-hidden rounded bg-white shadow-sm">
-                <div style={{ width: THUMB_WIDTH, height: thumbH }}>
-                  <div style={{ transform: `scale(${THUMB_WIDTH / presentation.width})`, transformOrigin: 'top left' }}>
+                <div style={{ width: thumbW, height: thumbH }}>
+                  <div style={{ transform: `scale(${thumbW / presentation.width})`, transformOrigin: 'top left' }}>
                     <SlideRenderer slide={slide} width={presentation.width} height={Math.round(presentation.width / ratio)} staticMode />
                   </div>
                 </div>

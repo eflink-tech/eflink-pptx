@@ -129,16 +129,22 @@ export async function parseShapeEl(
     return line
   }
 
-  // 纯文本框：rect/textbox 且无填充无边框（noFill 视为无填充，与旧实现兼容；带 a:ln 的走形状分支保留 outline）
-  if (node.nodeName === 'p:sp' && (prst === 'rect' || prst === 'textbox' || (!prst && !custGeom)) && txBody && !solidFill && !gradFill && !ln) {
+  // 纯文本框：rect/textbox 且无填充无边框（noFill 视为无填充，与旧实现兼容；a:ln 内 a:noFill
+  // 即 PowerPoint 文本框的标准「无边框线」声明，同样视为无边框——此类框需走文本分支保留
+  // insets/spAutoFit/富文本，落入形状分支会被降级为纯文本且丢失垂直内边距）；带实体边框的走形状分支
+  const lnNoFill = ln ? Boolean(directChild(ln, 'a:noFill')) : false
+  if (node.nodeName === 'p:sp' && (prst === 'rect' || prst === 'textbox' || (!prst && !custGeom)) && txBody && !solidFill && !gradFill && (!ln || lnNoFill)) {
     const body = await txBodyToHTML(txBody, ctx.theme, pkg, ctx.partPath)
     const text: TextElement = {
       id: genId('t-'), type: 'text', x, y, w, h,
       content: body.html,
       rotate: rot ? Math.round(rot) : undefined,
-      defaultColor: '#333333', lineHeight: 1.5, padding: 8, name: '文本框',
+      // 行距取 PowerPoint 单倍行距近似 1.2（源文件通常不声明行距，硬编码 1.5 会放大内容需求导致裁剪；
+      // 段级 lnSpc 已由内联 line-height 覆盖）；padding 取 bodyPr insets 折算值（缺省回退编辑器默认 8）
+      defaultColor: '#333333', lineHeight: 1.2, padding: body.padding ?? 8, name: '文本框',
     }
     if (body.autoSize) text.autoSize = true
+    if (body.autoFitShape) text.autoFit = true
     if (body.vertical) text.vertical = true
     if (shadow) text.shadow = shadow
     return text

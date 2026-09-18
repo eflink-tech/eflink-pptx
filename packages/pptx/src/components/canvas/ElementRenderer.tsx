@@ -61,6 +61,8 @@ function TextItem({
     lineHeight: el.lineHeight ?? 1.5,
     letterSpacing: el.charSpace ? `${el.charSpace}px` : undefined,
     padding: el.padding ?? 8,
+    // autoFit（源 spAutoFit）：PowerPoint 文本框内容超高时溢出显示而非裁剪（内联样式覆盖 overflow-hidden 类）
+    overflow: el.autoFit ? 'visible' : undefined,
     WebkitTextStroke: el.textStroke ? `${el.textStroke.width}px ${el.textStroke.color}` : undefined,
     textShadow: el.shadow ? `${el.shadow.h}px ${el.shadow.v}px ${el.shadow.blur}px ${el.shadow.color}` : undefined,
     writingMode: el.vertical ? 'vertical-rl' : undefined,

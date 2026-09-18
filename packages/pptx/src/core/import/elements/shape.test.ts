@@ -192,6 +192,33 @@ describe('parseShapeEl', () => {
     expect(result.fontSize).toBe(21)
   })
 
+  it('纯文本框：bodyPr insets → padding、spAutoFit → autoFit、默认行距 1.2', async () => {
+    const xml = `<?xml version="1.0"?>
+<p:sld xmlns:p="urn:p" xmlns:a="urn:a"><p:cSld><p:spTree>
+  <p:sp>
+    <p:nvSpPr><p:cNvPr id="2" name="Plain Box"/><p:cNvSpPr txBox="1"/></p:nvSpPr>
+    <p:spPr>
+      <a:xfrm><a:off x="0" y="0"/><a:ext cx="1905000" cy="457200"/></a:xfrm>
+      <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+      <a:noFill/>
+      <a:ln><a:noFill/></a:ln>
+    </p:spPr>
+    <p:txBody><a:bodyPr lIns="0" tIns="0" rIns="0" bIns="0"><a:spAutoFit/></a:bodyPr>
+      <a:p><a:r><a:rPr lang="zh-CN" sz="3200"/><a:t>单行标题</a:t></a:r></a:p>
+    </p:txBody>
+  </p:sp>
+</p:spTree></p:cSld></p:sld>`
+    const { pkg, ctx } = await makeCtx(xml)
+    const sp = el(xml).getElementsByTagName('p:sp')[0]
+    const result = await parseShapeEl(sp, ctx, IDENTITY_XFORM, pkg)
+    if (result?.type !== 'text') throw new Error('expected text')
+    // 32pt → 43px，单倍行距 1.2 → 51.6px + 0 边距 ≈ 框高 48px（溢出由 autoFit 兜底不裁剪）
+    expect(result.lineHeight).toBe(1.2)
+    expect(result.padding).toBe(0)
+    expect(result.autoFit).toBe(true)
+    expect(result.autoSize).toBeUndefined()
+  })
+
   it('占位符继承：无 xfrm 时从 placeholders 取位置折算 px', async () => {
     const xml = `<?xml version="1.0"?>
 <p:sld xmlns:p="urn:p" xmlns:a="urn:a"><p:cSld><p:spTree>

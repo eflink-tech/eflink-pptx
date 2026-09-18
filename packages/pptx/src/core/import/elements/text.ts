@@ -9,6 +9,11 @@ export interface TextBodyResult {
   html: string
   autoSize: boolean
   vertical: boolean
+  /** bodyPr 上下 insets 折算的内边距（px）；无 bodyPr 时为 null（调用方回退默认值）。
+   * TextElement.padding 为单值，取上下平均——垂直方向是内容溢出/裁剪的主因 */
+  padding: number | null
+  /** bodyPr 含 a:spAutoFit：框随文本自动增高（PowerPoint 中此类文本框内容超高时溢出显示而非裁剪） */
+  autoFitShape: boolean
 }
 
 function escapeHTML(text: string): string {
@@ -114,6 +119,14 @@ export async function txBodyToHTML(
   const autoSize = Boolean(bodyPr && directChild(bodyPr, 'a:normAutofit'))
   const vert = attr(bodyPr, 'vert')
   const vertical = vert === 'eaVert' || vert === 'vert' || vert === 'mongolianVert'
+  // insets（EMU→px）：OOXML 默认 tIns/bIns=45720；padding 单值取上下平均
+  let padding: number | null = null
+  if (bodyPr) {
+    const tIns = parseInt(attr(bodyPr, 'tIns') ?? '45720', 10) || 0
+    const bIns = parseInt(attr(bodyPr, 'bIns') ?? '45720', 10) || 0
+    padding = Math.round((tIns + bIns) / 2 / 9525)
+  }
+  const autoFitShape = Boolean(bodyPr && directChild(bodyPr, 'a:spAutoFit'))
 
   const paragraphs = directChildren(txBody, 'a:p')
   const paras: ParaInfo[] = []
@@ -152,5 +165,5 @@ export async function txBodyToHTML(
     }
     html.push(`<${tag}>${items.join('')}</${tag}>`)
   }
-  return { html: html.join('') || '<p></p>', autoSize, vertical }
+  return { html: html.join('') || '<p></p>', autoSize, vertical, padding, autoFitShape }
 }
