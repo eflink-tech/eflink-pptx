@@ -22,18 +22,22 @@ export interface SlideAncestry {
   placeholders: Map<string, { x: number; y: number; w: number; h: number }>
 }
 
-async function relTargetByType(pkg: PptxPackage, partPath: string, keyword: string): Promise<string | null> {
+/** slide → layout / layout → master 关系 Type URI（与 theme.ts THEME_REL_TYPE 同模式） */
+const SLIDE_LAYOUT_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout'
+const SLIDE_MASTER_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster'
+
+async function relTargetByType(pkg: PptxPackage, partPath: string, relType: string): Promise<string | null> {
   const rels = await pkg.rels(partPath)
   for (const rel of rels.values()) {
-    if (rel.mode !== 'External' && rel.target.includes(`/${keyword}/`)) return rel.target
+    if (rel.mode !== 'External' && rel.type === relType) return rel.target
   }
   return null
 }
 
 /** slide → layout → master 部件链 */
 export async function findAncestry(pkg: PptxPackage, slidePath: string): Promise<{ layoutPath: string | null; masterPath: string | null }> {
-  const layoutPath = await relTargetByType(pkg, slidePath, 'slideLayouts')
-  const masterPath = layoutPath ? await relTargetByType(pkg, layoutPath, 'slideMasters') : null
+  const layoutPath = await relTargetByType(pkg, slidePath, SLIDE_LAYOUT_REL)
+  const masterPath = layoutPath ? await relTargetByType(pkg, layoutPath, SLIDE_MASTER_REL) : null
   return { layoutPath, masterPath }
 }
 
@@ -128,15 +132,16 @@ export async function parseSlideAncestry(
     }
     const bg = firstDescendant(doc.documentElement, 'p:bg')
     const partBg = parseBackgroundFill(bg, theme)
-    if (partBg && !background) background = partBg
-    // 背景图片 src：bgPr/a:blip@r:embed → rels
-    if (partBg?.type === 'image' && bg) {
-      const blip = firstDescendant(bg, 'a:blip')
-      const embedId = attr(blip, 'r:embed')
-      if (embedId) {
-        const target = await pkg.relTarget(partPath, embedId)
+    if (partBg && bg && !background) {
+      if (partBg.type === 'image') {
+        // 图片背景：src 解析成功才赋值，否则保持 undefined 由后续部件/lt1 兜底（避免悬空 image 背景）
+        const blip = firstDescendant(bg, 'a:blip')
+        const embedId = attr(blip, 'r:embed')
+        const target = embedId ? await pkg.relTarget(partPath, embedId) : null
         const src = target ? await pkg.mediaDataUrl(target) : undefined
         if (src) background = { type: 'image', image: { src, size: 'cover' } }
+      } else {
+        background = partBg
       }
     }
     // 非占位符装饰元素

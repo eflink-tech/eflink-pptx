@@ -29,14 +29,14 @@ const CHART_XML = `<?xml version="1.0"?>
   </c:plotArea></c:chart>
 </c:chartSpace>`
 
-async function makeCtx() {
+async function makeCtx(chartXml: string = CHART_XML) {
   const zip = new JSZip()
   zip.file('ppt/slides/slide1.xml', `<p:sld xmlns:p="urn:p" xmlns:c="urn:c"/>`)
   zip.file('ppt/slides/_rels/slide1.xml.rels', `<?xml version="1.0"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart" Target="../charts/chart1.xml"/>
 </Relationships>`)
-  zip.file('ppt/charts/chart1.xml', CHART_XML)
+  zip.file('ppt/charts/chart1.xml', chartXml)
   const pkg = await PptxPackage.load(await zip.generateAsync({ type: 'blob' }))
   const ctx = {
     pkg,
@@ -90,5 +90,30 @@ describe('parseChartEl', () => {
     expect(result.chartType).toBe('bar-cluster')
     expect(result.data.labels).toEqual(['一月', '二月'])
     expect(result.data.series).toEqual([{ name: '系列一', values: [10, 25] }])
+  })
+
+  it('scatterChart：c:xVal/c:yVal → labels= xVal、values= yVal', async () => {
+    const SCATTER_XML = `<?xml version="1.0"?>
+<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="urn:a">
+  <c:chart><c:plotArea>
+    <c:scatterChart>
+      <c:ser>
+        <c:tx><c:strRef><c:strCache><c:pt idx="0"><c:v>散点</c:v></c:pt></c:strCache></c:strRef></c:tx>
+        <c:xVal><c:numRef><c:numCache>
+          <c:pt idx="0"><c:v>1</c:v></c:pt><c:pt idx="1"><c:v>3</c:v></c:pt>
+        </c:numCache></c:numRef></c:xVal>
+        <c:yVal><c:numRef><c:numCache>
+          <c:pt idx="0"><c:v>5</c:v></c:pt><c:pt idx="1"><c:v>7</c:v></c:pt>
+        </c:numCache></c:numRef></c:yVal>
+      </c:ser>
+    </c:scatterChart>
+  </c:plotArea></c:chart>
+</c:chartSpace>`
+    const { pkg, ctx } = await makeCtx(SCATTER_XML)
+    const result = await parseChartEl(el(FRAME_XML), ctx, IDENTITY_XFORM, pkg)
+    if (result?.type !== 'chart') throw new Error('expected chart')
+    expect(result.chartType).toBe('scatter')
+    expect(result.data.labels).toEqual(['1', '3'])
+    expect(result.data.series).toEqual([{ name: '散点', values: [5, 7] }])
   })
 })

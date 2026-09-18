@@ -2,9 +2,10 @@
 /** p:graphicFrame(c:chart) → chart 元素（OOXML chart part 缓存数据 → ChartData） */
 import { attr, directChild, directChildren, firstDescendant, parseXML } from '../xml'
 import { genId } from '../../utils/id'
-import { mapX, mapY, addSkipped } from '../context'
+import { addSkipped } from '../context'
 import type { GroupXform, ParseContext } from '../context'
 import type { PptxPackage } from '../package'
+import { parseFrameGeom } from './frame-geom'
 import type { ChartElement, ChartType } from '../../../types/slides'
 
 interface ChartKindHints {
@@ -82,6 +83,10 @@ export async function parseChartEl(
     return null
   }
 
+  // 数值缓存 → 数字，过滤 NaN/Infinity 等非法值
+  const toNumbers = (vals: string[]): number[] => vals.map(Number).filter(Number.isFinite)
+  // 数值型标签：仅保留可解析为有限数字的项
+  const numericOnly = (vals: string[]): string[] => vals.filter((v) => Number.isFinite(Number(v)))
   // scatter 使用 c:xVal/c:yVal，其余用 c:cat/c:val
   const sers = directChildren(kindNode, 'c:ser')
   if (!sers.length) {
@@ -91,34 +96,25 @@ export async function parseChartEl(
   const isScatter = kindNode.localName === 'scatterChart'
   let labels: string[]
   if (isScatter) {
-    labels = cacheValues(firstDescendant(sers[0], 'c:xVal'), 'c:numCache')
+    labels = numericOnly(cacheValues(firstDescendant(sers[0], 'c:xVal'), 'c:numCache'))
   } else {
     labels = cacheValues(firstDescendant(sers[0], 'c:cat'), 'c:strCache')
-    if (!labels.length) labels = cacheValues(firstDescendant(sers[0], 'c:cat'), 'c:numCache')
+    if (!labels.length) labels = numericOnly(cacheValues(firstDescendant(sers[0], 'c:cat'), 'c:numCache'))
   }
   const series = sers.map((ser) => ({
     name: cacheValues(firstDescendant(ser, 'c:tx'), 'c:strCache')[0] ?? '系列',
     values: isScatter
-      ? cacheValues(firstDescendant(ser, 'c:yVal'), 'c:numCache').map(Number)
-      : cacheValues(firstDescendant(ser, 'c:val'), 'c:numCache').map(Number),
+      ? toNumbers(cacheValues(firstDescendant(ser, 'c:yVal'), 'c:numCache'))
+      : toNumbers(cacheValues(firstDescendant(ser, 'c:val'), 'c:numCache')),
   }))
 
-  const xfrm = firstDescendant(node, 'p:xfrm') ?? firstDescendant(node, 'a:xfrm')
-  const off = xfrm ? directChild(xfrm, 'a:off') : null
-  const ext = xfrm ? directChild(xfrm, 'a:ext') : null
-  if (!off || !ext) return null
-  const ex = parseInt(attr(off, 'x') ?? '0', 10)
-  const ey = parseInt(attr(off, 'y') ?? '0', 10)
-  const ew = parseInt(attr(ext, 'cx') ?? '0', 10)
-  const eh = parseInt(attr(ext, 'cy') ?? '0', 10)
+  const geom = parseFrameGeom(node, xf, ctx)
+  if (!geom) return null
 
   const chart: ChartElement = {
     id: genId('ch-'), type: 'chart', chartType,
     data: { labels, series },
-    x: Math.round(mapX(xf, ex) / 9525 * ctx.scale.x),
-    y: Math.round(mapY(xf, ey) / 9525 * ctx.scale.y),
-    w: Math.max(1, Math.round((mapX(xf, ex + ew) - mapX(xf, ex)) / 9525 * ctx.scale.x)),
-    h: Math.max(1, Math.round((mapY(xf, ey + eh) - mapY(xf, ey)) / 9525 * ctx.scale.y)),
+    x: geom.x, y: geom.y, w: geom.w, h: geom.h,
     name: '图表',
   }
   const titleEl = firstDescendant(root, 'c:title')

@@ -1,6 +1,7 @@
 // src/core/import/elements/group.ts
 /** p:grpSp 递归展开：组合变换（off/ext vs chOff/chExt）折算到子元素 */
 import { attr, directChild, firstDescendant } from '../xml'
+import { addSkipped } from '../context'
 import type { GroupXform } from '../context'
 import type { PPTElement } from '../../../types/slides'
 import { parseSpTreeNode } from './index'
@@ -31,8 +32,8 @@ export function childXform(grpSp: Element, xf: GroupXform): GroupXform {
     oy: xf.oy + (offY - chY * sy) * xf.sy,
     sx: xf.sx * sx,
     sy: xf.sy * sy,
-    // rot 保持六万分之一度原始值累加，由 parseShapeEl 统一 /60000
-    rot: xf.rot + parseInt(attr(xfrm, 'rot') ?? '0', 10),
+    // 组合旋转降级：rot 不向子元素传播（组合 rot 由 parseGroupEl 记入报告）
+    rot: 0,
   }
 }
 
@@ -43,6 +44,12 @@ export async function parseGroupEl(
   xf: GroupXform,
   pkg: PptxPackage,
 ): Promise<PPTElement[]> {
+  // 组合旋转降级：内部元素模型为「轴对齐 bbox + 绕自身中心旋转」，无法表达组合整体旋转
+  // （若把 rot 传给子元素会导致其错误地原地旋转）。显式丢弃组合 rot 并记录视觉偏差，
+  // 不做静默错绘。后续若引入中心感知仿射（GroupXform 扩展 cos/sin）可移除此降级。
+  const grpXfrm = firstDescendant(grpSp, 'a:xfrm')
+  const rot = grpXfrm ? parseInt(attr(grpXfrm, 'rot') ?? '0', 10) : 0
+  if (rot !== 0 || xf.rot !== 0) addSkipped(ctx.report, 'groupRotation')
   const cxf = childXform(grpSp, xf)
   const out: PPTElement[] = []
   // 组合子节点是 grpSp 的直接子级（p:sp/p:pic/p:grpSp/...），交由分发器处理

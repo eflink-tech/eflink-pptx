@@ -3,7 +3,7 @@
 import { attr, directChild, directChildren, firstDescendant } from '../xml'
 import { resolveColor } from '../styles'
 import { genId } from '../../utils/id'
-import { mapX, mapY } from '../context'
+import { parseFrameGeom } from './frame-geom'
 import type { GroupXform, ParseContext } from '../context'
 import type { PptxPackage } from '../package'
 import type { PptxTheme } from '../theme'
@@ -93,18 +93,9 @@ export async function parseTableEl(
   xf: GroupXform,
   _pkg: PptxPackage,
 ): Promise<TableElement | null> {
-  const xfrm = firstDescendant(node, 'p:xfrm') ?? firstDescendant(node, 'a:xfrm')
-  const off = xfrm ? directChild(xfrm, 'a:off') : null
-  const ext = xfrm ? directChild(xfrm, 'a:ext') : null
-  if (!off || !ext) return null
-  const ex = parseInt(attr(off, 'x') ?? '0', 10)
-  const ey = parseInt(attr(off, 'y') ?? '0', 10)
-  const ew = parseInt(attr(ext, 'cx') ?? '0', 10)
-  const eh = parseInt(attr(ext, 'cy') ?? '0', 10)
-  const x = Math.round(mapX(xf, ex) / 9525 * ctx.scale.x)
-  const y = Math.round(mapY(xf, ey) / 9525 * ctx.scale.y)
-  const w = Math.max(1, Math.round((mapX(xf, ex + ew) - mapX(xf, ex)) / 9525 * ctx.scale.x))
-  const h = Math.max(1, Math.round((mapY(xf, ey + eh) - mapY(xf, ey)) / 9525 * ctx.scale.y))
+  const geom = parseFrameGeom(node, xf, ctx)
+  if (!geom) return null
+  const { x, y, w, h } = geom
 
   const tbl = firstDescendant(node, 'a:tbl')
   if (!tbl) return null
