@@ -6,7 +6,6 @@ import { ExportDialog } from './ExportDialog'
 import { ImportDialog } from './ImportDialog'
 import { FindReplaceDialog } from './FindReplaceDialog'
 import { HotkeyDialog } from './HotkeyDialog'
-import { FileManagerDialog } from './FileManagerDialog'
 
 export function Modal({ title, children, width = 520 }: { title: string; children: React.ReactNode; width?: number }) {
   const closeModal = useUIStore((s) => s.closeModal)
@@ -33,7 +32,6 @@ export function ModalHost() {
     case 'import': return <ImportDialog />
     case 'findReplace': return <FindReplaceDialog />
     case 'hotkey': return <HotkeyDialog />
-    case 'fileManager': return <FileManagerDialog />
     default: return null
   }
 }

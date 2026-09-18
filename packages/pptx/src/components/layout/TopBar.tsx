@@ -3,7 +3,7 @@ import { useRef, useState } from 'react'
 import logoUrl from '../../assets/pptx-eflink-logo.png'
 import {
   Undo2, Redo2, MonitorPlay, MonitorSpeaker, Sparkles, Grid3x3, LayoutTemplate,
-  Palette, Upload, Download, FolderOpen, FilePlus2, Save, PanelLeft, Keyboard, Search, ArrowLeft, Share2, MessageCircle,
+  Palette, Upload, Download, FilePlus2, Save, PanelLeft, Keyboard, Search, ArrowLeft, Share2, MessageCircle,
 } from 'lucide-react'
 import { useEditorStore } from '../../store/editorStore'
 import { useUIStore, useToastStore } from '../../store/uiStore'
@@ -79,7 +79,6 @@ export function TopBar() {
         const doc = await createDoc('未命名演示文稿')
         useEditorStore.getState().loadDocument(doc)
       }} />
-      <ToolButton icon={<FolderOpen size={17} />} label="文档管理" onClick={() => ui.openModal('fileManager')} />
       <ToolButton icon={<Save size={17} />} label="保存（Ctrl+S）" onClick={() => {
         const s = useEditorStore.getState()
         if (!s.docId) { useToastStore.getState().toast('文档未初始化，无法保存', 'error'); return }

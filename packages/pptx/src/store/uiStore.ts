@@ -3,7 +3,7 @@ import { create } from 'zustand'
 
 export type ModalName =
   | 'template' | 'theme' | 'export' | 'import' | 'findReplace'
-  | 'hotkey' | 'fileManager' | 'aiSettings' | 'aiHistory' | 'about' | null
+  | 'hotkey' | 'aiSettings' | 'aiHistory' | 'about' | null
 
 export type PlayerMode = 'off' | 'playing' | 'presenter'
 
