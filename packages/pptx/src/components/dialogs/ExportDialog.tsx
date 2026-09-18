@@ -1,11 +1,22 @@
 // 导出对话框：PPTX / 图片 / JSON / 打印
 import { useState } from 'react'
+import { Loader2 } from 'lucide-react'
 import { Modal } from './ModalHost'
 import { useEditorStore } from '../../store/editorStore'
 import { useUIStore, useToastStore } from '../../store/uiStore'
 import { exportJSON } from '../../core/export/json'
 import { exportImages, renderSlideToBlob } from '../../core/export/image'
 import { exportPPTX } from '../../core/export/pptx'
+
+/** 执行中按钮的标签：spinner +「导出中」+ 进度（如有） */
+function BusyLabel({ progress }: { progress?: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <Loader2 size={14} className="animate-spin" />
+      导出中{progress ? ` (${progress})` : '…'}
+    </span>
+  )
+}
 
 export function ExportDialog() {
   const [busy, setBusy] = useState('')
@@ -54,10 +65,15 @@ export function ExportDialog() {
         <button
           className="w-full rounded-lg border border-gray-200 px-4 py-3 text-left hover:border-[#d14424] disabled:opacity-50"
           disabled={Boolean(busy)}
-          onClick={() => void run('pptx', () => exportPPTX(useEditorStore.getState().presentation, useEditorStore.getState().docName))}
+          onClick={() => void run('pptx', async () => {
+            const store = useEditorStore.getState()
+            await exportPPTX(store.presentation, store.docName, (done, total) => setProgress(`${done}/${total}`))
+          })}
           data-testid="export-pptx"
         >
-          <div className="text-sm font-medium text-gray-700">导出 PPTX</div>
+          <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+            {busy === 'pptx' ? <BusyLabel progress={progress} /> : '导出 PPTX'}
+          </div>
           <div className="mt-0.5 text-xs text-gray-400">文本/形状/图片/表格/图表转为原生 PPT 对象，可用 PowerPoint / WPS 打开</div>
         </button>
 
@@ -76,7 +92,7 @@ export function ExportDialog() {
                 (done, total) => setProgress(`${done}/${total}`),
               ))}
             >
-              PNG{busy === 'png' && progress ? ` (${progress})` : ''}
+              {busy === 'png' ? <BusyLabel progress={progress} /> : 'PNG'}
             </button>
             <button
               className="rounded border border-gray-200 px-3 py-1 text-xs hover:bg-gray-50 disabled:opacity-50"
@@ -123,7 +139,9 @@ export function ExportDialog() {
             closeModal()
           })}
         >
-          <div className="text-sm font-medium text-gray-700">打印 / 导出 PDF{busy === 'pdf' && progress ? ` (${progress})` : ''}</div>
+          <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+            {busy === 'pdf' ? <BusyLabel progress={progress} /> : '打印 / 导出 PDF'}
+          </div>
           <div className="mt-0.5 text-xs text-gray-400">通过浏览器打印对话框另存为 PDF</div>
         </button>
       </div>

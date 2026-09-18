@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { chartNativeSpec, normColor, parseRunsFromHTML, pxToInch as IN, pxToPt as PT, exportShape, withImageHeader } from './pptx'
+import { chartNativeSpec, normColor, parseRunsFromHTML, pxToInch as IN, pxToPt as PT, exportShape, withImageHeader, exportPPTX, fontFaceOf } from './pptx'
 import type { ChartType, Presentation, ShapeElement, Slide } from '../../types/slides'
 import { createDefaultTheme } from '../../types/slides'
 
@@ -7,6 +7,24 @@ import { createDefaultTheme } from '../../types/slides'
 vi.mock('./image', () => ({
   renderSlideToBlob: vi.fn(async () => new Blob(['fake-png'])),
 }))
+
+// pptxgenjs 与下载在单测中 mock 掉，仅验证导出主流程的回调行为
+vi.mock('pptxgenjs', () => ({
+  default: class {
+    slides: unknown[] = []
+    defineLayout = vi.fn()
+    addSlide = () => {
+      const s = {
+        addText: vi.fn(), addShape: vi.fn(), addTable: vi.fn(), addChart: vi.fn(),
+        addImage: vi.fn(), addMedia: vi.fn(), addNotes: vi.fn(), background: undefined,
+      }
+      this.slides.push(s)
+      return s
+    }
+    write = vi.fn(async () => new Blob(['x']))
+  },
+}))
+vi.mock('./json', () => ({ downloadBlob: vi.fn() }))
 
 describe('chartNativeSpec 图表导出映射', () => {
   it('柱状/条形图方向与堆积方式', () => {
@@ -99,9 +117,32 @@ describe('parseRunsFromHTML', () => {
     expect(result[0].align).toBe('center')
   })
 
+  it('内联 font-family → fontFace：中文 run 取 ea 位，纯西文取 latin 位', () => {
+    // 模拟导入产物的栈序：latin（微软雅黑）→ ea（PingFang SC）→ 系统回退
+    const html = `<p><span style="font-family:'微软雅黑', 'PingFang SC', 'Microsoft YaHei', sans-serif">中文</span><span style="font-family:'微软雅黑', 'PingFang SC', 'Microsoft YaHei', sans-serif">ABC</span></p>`
+    const result = parseRunsFromHTML(html)
+    expect(result[0].runs[0].options.fontFace).toBe('PingFang SC')
+    expect(result[0].runs[1].options.fontFace).toBe('微软雅黑')
+    // fontFamilies 是中间产物，不应泄漏进导出选项
+    expect(result[0].runs[0].options.fontFamilies).toBeUndefined()
+  })
+
   it('空内容兜底', () => {
     const result = parseRunsFromHTML('')
     expect(result).toHaveLength(1)
+  })
+})
+
+describe('fontFaceOf 字体栈 → fontFace', () => {
+  it('取首个非通用族名并去引号（PowerPoint 不识别 fallback 栈）', () => {
+    expect(fontFaceOf(`'Microsoft YaHei', 'PingFang SC', sans-serif`)).toBe('Microsoft YaHei')
+    expect(fontFaceOf('"DengXian", serif')).toBe('DengXian')
+    expect(fontFaceOf('等线')).toBe('等线')
+  })
+
+  it('纯通用族 / 空值返回 undefined', () => {
+    expect(fontFaceOf('sans-serif, serif')).toBeUndefined()
+    expect(fontFaceOf(undefined)).toBeUndefined()
   })
 })
 
@@ -115,6 +156,21 @@ describe('withImageHeader 图片 data 补 base64 头', () => {
     const url = 'data:image/jpeg;base64,/9j/4AAQ'
     expect(withImageHeader(url)).toBe(url)
     expect(withImageHeader('image/jpeg;base64,/9j/4AAQ')).toBe('image/jpeg;base64,/9j/4AAQ')
+  })
+})
+
+describe('exportPPTX 导出进度回调', () => {
+  it('每页导出后回调 (done, total)（对话框据此显示导出中 (n/m)）', async () => {
+    const slide: Slide = { id: 's1', elements: [] }
+    const pres: Presentation = {
+      slides: [slide, { ...slide, id: 's2' }],
+      theme: createDefaultTheme(), width: 1280, viewportRatio: 16 / 9,
+    }
+    const onProgress = vi.fn()
+    await exportPPTX(pres, '测试', onProgress)
+    expect(onProgress).toHaveBeenCalledTimes(2)
+    expect(onProgress).toHaveBeenNthCalledWith(1, 1, 2)
+    expect(onProgress).toHaveBeenNthCalledWith(2, 2, 2)
   })
 })
 

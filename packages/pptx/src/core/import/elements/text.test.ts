@@ -170,7 +170,8 @@ describe('txBodyToHTML', () => {
       <a:p><a:r><a:rPr><a:hlinkClick r:id="rId1"/></a:rPr><a:t>链接</a:t></a:r></a:p>
     </p:txBody>`)
     const r = await txBodyToHTML(txBody, theme, pkg, 'ppt/slides/slide1.xml')
-    expect(r.html).toContain('<a href="https://example.com">')
+    // run 未声明字体时回退主题字体（含 font-family 内联样式），故只断言 href 前缀
+    expect(r.html).toContain('<a href="https://example.com"')
   })
 
   it('超链接 External：非白名单协议（javascript:）回退为 span，不产出 href', async () => {

@@ -32,6 +32,32 @@ function withImageHeader(data: string): string {
   return data.includes(';base64,') ? data : `image/png;base64,${data}`
 }
 
+/** CSS 字体栈 → pptxgenjs fontFace：取首个非通用族名并去引号。
+ * PowerPoint 不识别 fallback 栈（整个字符串塞进 typeface 会被当作未知字体，
+ * 中文回退到宋体），只导出真实存在的单一族名 */
+const GENERIC_FAMILIES = new Set(['sans-serif', 'serif', 'monospace', 'cursive', 'fantasy', 'system-ui', 'ui-sans-serif'])
+export function fontFaceOf(stack: string | undefined): string | undefined {
+  return fontFamiliesOf(stack ?? '')[0]
+}
+
+/** 内联 font-family 栈 → 族名数组（去引号、去通用族，保持栈序：latin 在前 ea 在后） */
+function fontFamiliesOf(stack: string): string[] {
+  return stack
+    .split(',')
+    .map((s) => s.trim().replace(/^['"]|['"]$/g, ''))
+    .filter((n) => n && !GENERIC_FAMILIES.has(n.toLowerCase()))
+}
+
+const CJK_RE = /[㐀-䶿一-鿿　-〿＀-￯]/
+
+/** 按 run 文本选字体：含中文用 ea 位（栈中第 2 个族名），纯西文用 latin 位（第 1 个）。
+ * pptxgenjs 把 fontFace 同时写入 latin/ea/cs 三个位，中文 run 若写 latin 字体
+ * （如 Arial，无 CJK 字形）会被 PowerPoint 替换回默认宋体 */
+function pickFontFace(families: string[] | undefined, text: string): string | undefined {
+  if (!families?.length) return undefined
+  return CJK_RE.test(text) ? families[1] ?? families[0] : families[0]
+}
+
 /** 颜色归一化为 pptxgenjs 需要的 RRGGBB（无 #，透明混合白底） */
 function normColor(color: string | undefined): string | undefined {
   if (!color) return undefined
@@ -95,7 +121,13 @@ function parseRunsFromHTML(html: string): Array<{ align?: string; runs: TextRun[
   const walkInline = (node: Node, style: Record<string, unknown>, runs: TextRun[]): void => {
     if (node.nodeType === Node.TEXT_NODE) {
       const text = node.textContent ?? ''
-      if (text) runs.push({ text, options: { ...style } })
+      if (text) {
+        const options = { ...style }
+        // 字体按文本内容逐 run 选择（中/西文用栈中不同位），fontFamilies 本身不进导出选项
+        if (style.fontFamilies) options.fontFace = pickFontFace(style.fontFamilies as string[], text)
+        delete options.fontFamilies
+        runs.push({ text, options })
+      }
       return
     }
     if (node.nodeType !== Node.ELEMENT_NODE) return
@@ -123,6 +155,8 @@ function parseRunsFromHTML(html: string): Array<{ align?: string; runs: TextRun[
     if (fs) next.fontSize = PT(parseFloat(fs))
     const bg = inlineStyle.match(/background(?:-color)?:\s*([^;]+)/i)?.[1]
     if (bg) { const b = normColor(bg); if (b) next.highlight = b }
+    const ff = inlineStyle.match(/font-family:\s*([^;]+)/i)?.[1]
+    if (ff) next.fontFamilies = fontFamiliesOf(ff)
     for (const child of Array.from(el.childNodes)) walkInline(child, next, runs)
   }
 
@@ -196,9 +230,11 @@ async function exportText(pptx: PptxGenJS, slide: Slide, el: TextElement, pres: 
       color: baseColor,
       lineHeight: el.lineHeight ?? 1.5,
       valign: 'top',
-      margin: 0,
+      // 内边距对齐编辑器渲染（px→pt），否则 PowerPoint 默认 insets 或 0 与画布不一致
+      margin: PT(el.padding ?? 8),
       isTextBox: true,
-      autoFit: false,
+      // 与导入映射对应：autoSize（normAutofit 缩字适应框）→ shrink，autoFit（spAutoFit 框随文本）→ resize
+      fit: el.autoSize ? 'shrink' : el.autoFit ? 'resize' : undefined,
     },
     runs,
   }
@@ -233,6 +269,7 @@ export async function exportShape(pptx: PptxGenJS, slide: Slide, el: ShapeElemen
             text: el.text,
             options: {
               fontSize: PT(el.fontSize ?? 18), color: normColor(el.defaultColor) ?? 'FFFFFF',
+              fontFace: fontFaceOf(el.defaultFontName),
               align: el.align ?? 'center', valign: el.valign ?? 'middle',
               lineHeight: el.lineHeight ?? 1.2,
             },
@@ -402,7 +439,12 @@ async function exportMedia(el: Extract<PPTElement, { type: 'video' | 'audio' }>)
 
 /* ---------- 主入口 ---------- */
 
-export async function exportPPTX(presentation: Presentation, docName: string): Promise<void> {
+/** onProgress：每页导出完成后回调 (done, total)，供对话框显示进度 */
+export async function exportPPTX(
+  presentation: Presentation,
+  docName: string,
+  onProgress?: (done: number, total: number) => void,
+): Promise<void> {
   const pptx = new PptxGenJS()
   const w = presentation.width
   const h = Math.round(presentation.width / presentation.viewportRatio)
@@ -411,7 +453,7 @@ export async function exportPPTX(presentation: Presentation, docName: string): P
   pptx.author = 'eflink-pptx'
   pptx.title = docName
 
-  for (const slide of presentation.slides) {
+  for (const [i, slide] of presentation.slides.entries()) {
     const s = pptx.addSlide()
 
     // 背景
@@ -481,6 +523,7 @@ export async function exportPPTX(presentation: Presentation, docName: string): P
     }
 
     if (slide.note) s.addNotes(slide.note)
+    onProgress?.(i + 1, presentation.slides.length)
   }
 
   await pptx.write({ outputType: 'blob' }).then((blob) => {

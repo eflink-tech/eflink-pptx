@@ -58,12 +58,12 @@ function runStyles(rPr: Element | null, defRPr: Element | null, theme: PptxTheme
   const fill = (rPr ? directChild(rPr, 'a:solidFill') : null) ?? (defRPr ? directChild(defRPr, 'a:solidFill') : null)
   const color = resolveColor(fill, theme)
   if (color) styles.push(`color:${color}`)
-  // 字体栈：latin + ea（含 +mj/+mn 主题引用），中文回退栈兜底；字体名来自不可信属性，fontStackOf 内已剔除引号防注入
+  // 字体栈：latin + ea（含 +mj/+mn 主题引用）；run 未声明字体时回退主题字体——多数源文件
+  // 字体继承自主题（run 无 a:latin/a:ea），完全不写字体会让导出 PPTX 在 PowerPoint 中
+  // 回退到默认宋体。字体名来自不可信属性，fontStackOf 内已剔除引号防注入
   const latin = ((rPr ? directChild(rPr, 'a:latin') : null) ?? (defRPr ? directChild(defRPr, 'a:latin') : null))
   const ea = ((rPr ? directChild(rPr, 'a:ea') : null) ?? (defRPr ? directChild(defRPr, 'a:ea') : null))
-  if (attr(latin, 'typeface') || attr(ea, 'typeface')) {
-    styles.push(`font-family:${fontStackOf(attr(latin, 'typeface'), attr(ea, 'typeface'), theme)}`)
-  }
+  styles.push(`font-family:${fontStackOf(attr(latin, 'typeface') ?? '+mn-lt', attr(ea, 'typeface') ?? '+mn-ea', theme)}`)
   return styles
 }
 
