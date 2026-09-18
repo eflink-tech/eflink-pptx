@@ -54,7 +54,8 @@ describe('preview/renderPicture', () => {
   })
 
   it('缺失图片 → null 且计入报告', async () => {
-    const ctx = makeCtx()
+    // 走真实包路径：rIdX 不存在 → relTarget 返回 null（而非空包桩抛 TypeError）
+    const ctx = await makePictureCtx()
     const node = wrap(`<p:pic><p:nvPicPr><p:cNvPr id="2" name="pic"/><p:nvPr/></p:nvPicPr>
       <p:blipFill><a:blip r:embed="rIdX"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>
       <p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="10" cy="10"/></a:xfrm></p:spPr></p:pic>`)

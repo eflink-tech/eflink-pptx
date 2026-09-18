@@ -1,4 +1,5 @@
-/** p:pic → <image>：srcRect 裁剪（裁剪子区映射满框 + clipPath 裁回）、阴影、边框；音视频渲染海报帧 + 播放标记。 */
+/** p:pic → <image>：srcRect 裁剪（裁剪子区映射满框 + clipPath 裁回）、阴影、边框；音视频渲染海报帧 + 播放标记。
+ * 已知取舍：prstGeom 形状裁剪（圆形头像等）忽略，一律按矩形框渲染。 */
 import { attr, directChild, firstDescendant } from '../import/xml'
 import { addSkipped } from '../import/context'
 import { registerShadowFilter, lnOf } from './shape'

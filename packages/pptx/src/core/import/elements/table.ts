@@ -42,13 +42,19 @@ function cellStyleOf(tc: Element, theme: PptxTheme): TableCell['style'] {
   return style
 }
 
-/** a:tbl → cells 矩阵（合并原点带 colspan/rowspan，被并格为 null） */
-export function buildCellMatrix(tbl: Element, theme: PptxTheme): { cells: Array<Array<TableCell | null>> } {
+/** a:tbl → cells 矩阵（合并原点带 colspan/rowspan，被并格为 null）；
+ * tcEls 为对应源 a:tc 元素矩阵（预览层富文本用），与 cells 形状一致：普通格=元素，合并占位/覆盖区=null */
+export function buildCellMatrix(tbl: Element, theme: PptxTheme): {
+  cells: Array<Array<TableCell | null>>
+  tcEls: Array<Array<Element | null>>
+} {
   const trs = directChildren(tbl, 'a:tr')
   const cells: Array<Array<TableCell | null>> = []
+  const tcEls: Array<Array<Element | null>> = []
   const occupied: Array<Array<boolean>> = []
   for (let r = 0; r < trs.length; r += 1) {
     cells.push([])
+    tcEls.push([])
     occupied.push([])
   }
   trs.forEach((tr, r) => {
@@ -57,6 +63,7 @@ export function buildCellMatrix(tbl: Element, theme: PptxTheme): { cells: Array<
       // hMerge/vMerge 是合并延续占位：仅占一个网格位，标记 null 后前进一列
       if (attr(tc, 'hMerge') === '1' || attr(tc, 'vMerge') === '1') {
         cells[r][c] = null
+        tcEls[r][c] = null
         occupied[r][c] = true
         c += 1
         continue
@@ -71,20 +78,24 @@ export function buildCellMatrix(tbl: Element, theme: PptxTheme): { cells: Array<
         rowspan: rowspan > 1 ? rowspan : undefined,
         style: cellStyleOf(tc, theme),
       }
-      // 覆盖区标记占用，并把被并格填充为 null
+      tcEls[r][c] = tc
+      // 覆盖区标记占用，并把被并格填充为 null（cells 与 tcEls 同步）
       for (let dr = 0; dr < rowspan; dr += 1) {
         for (let dc = 0; dc < colspan; dc += 1) {
           const rr = r + dr
           const cc = c + dc
           if (rr >= cells.length) continue
           occupied[rr][cc] = true
-          if (dr !== 0 || dc !== 0) cells[rr][cc] = null
+          if (dr !== 0 || dc !== 0) {
+            cells[rr][cc] = null
+            tcEls[rr][cc] = null
+          }
         }
       }
       c += colspan
     }
   })
-  return { cells }
+  return { cells, tcEls }
 }
 
 export async function parseTableEl(
