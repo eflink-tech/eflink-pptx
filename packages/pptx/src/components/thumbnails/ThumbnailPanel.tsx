@@ -59,12 +59,11 @@ export function ThumbnailPanel() {
           ＋
         </button>
       </div>
-      {/* 右侧 pr-4 给 macOS/移动端悬浮（overlay）滚动条留位，滑块不盖缩略图；
-          [scrollbar-gutter:stable] 为经典滚动条环境（Windows）常驻预留宽度，
-          两种环境下有/无滚动条布局均一致 */}
-      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pb-4 pr-4 [scrollbar-gutter:stable]">
+      {/* 每行 justify-center 居中：页码左空隙与缩略图右空隙（滚动条所在）自动对称；
+          [scrollbar-gutter:stable] 为经典滚动条环境（Windows）常驻预留宽度，有/无滚动条布局一致 */}
+      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto [scrollbar-gutter:stable]">
         {presentation.slides.map((slide, index) => (
-          <div key={slide.id} className="relative flex items-center gap-1.5">
+          <div key={slide.id} className="relative flex items-center justify-center gap-1.5">
             {/* 拖拽插入指示线（上） */}
             {showTopIndicator(index) && (
               <div className="absolute -top-1.5 left-7 right-0 z-10 h-0.5 rounded-full bg-[#d14424]" />
