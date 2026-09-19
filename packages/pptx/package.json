@@ -1,7 +1,7 @@
 {
   "name": "@eflink-tech/pptx",
   "description": "开箱即用的在线演示文稿编辑器 React 组件，可独立运行，也可作为组件嵌入任意 React 应用",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": [
