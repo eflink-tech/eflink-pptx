@@ -1,7 +1,9 @@
 /** p:graphicFrame(a:tbl) → 表格 SVG：合并格 rect + 复用 txBodyToHTML 的富文本单元格。
- * 边框简化：统一细边框（#BFBFBF 0.75px），OOXML 逐边 lnL/lnR/lnT/lnB 定制不还原（已知取舍）。 */
+ * 边框/填充/文字色来自 buildCellMatrix 合成结果（tcPr 显式 + tblPr 表格样式层叠），
+ * 未声明边框的表回退细灰线。 */
 import { attr, directChildren, firstDescendant } from '../import/xml'
 import { buildCellMatrix } from '../import/elements/table'
+import { resolveTableStyle } from '../import/elements/table-style'
 import { renderText } from './text'
 import { svgEl, geomOf, boxTransform, type PreviewCtx } from './svg'
 
@@ -32,7 +34,8 @@ export async function renderTable(node: Element, ctx: PreviewCtx): Promise<SVGEl
     acc += (h / rowTotal) * box.h
   }
 
-  const { cells, tcEls } = buildCellMatrix(tbl, ctx.theme)
+  const tblStyle = ctx.pkg ? await resolveTableStyle(tbl, ctx.pkg, ctx.theme) : undefined
+  const { cells, tcEls } = buildCellMatrix(tbl, ctx.theme, tblStyle)
   // 保留 frame 旋转；flip 对表格丢弃而非镜像（与 shape.ts 同理，表格翻转语义罕见且镜像文本不可读）
   const g = svgEl('g', { transform: boxTransform({ ...box, flipH: false, flipV: false }) })
   for (let r = 0; r < cells.length; r += 1) {
@@ -49,13 +52,18 @@ export async function renderTable(node: Element, ctx: PreviewCtx): Promise<SVGEl
       g.appendChild(svgEl('rect', {
         x, y, width: w, height: h,
         fill: cell.style?.backcolor ?? 'none',
-        stroke: '#BFBFBF', 'stroke-width': 0.75,
+        stroke: cell.style?.bordercolor ?? '#BFBFBF',
+        'stroke-width': cell.style?.borderwidth ?? 0.75,
       }))
-      // 富文本单元格：复用 txBodyToHTML（XSS 加固、加粗/字号/颜色/对齐生效）
+      // 富文本单元格：复用 txBodyToHTML（XSS 加固、加粗/字号/颜色/对齐生效）；
+      // 表格样式声明的文字色/加粗作为容器默认传入（run 未显式声明时经 CSS 继承生效）
       const tc = tcEls[r][c]
       const txBody = tc ? firstDescendant(tc, 'a:txBody') : null
       if (txBody) {
-        const text = await renderText(txBody, ctx, { x, y, w, h, rot: 0, flipH: false, flipV: false })
+        const text = await renderText(txBody, ctx, { x, y, w, h, rot: 0, flipH: false, flipV: false }, {
+          color: cell.style?.color,
+          bold: cell.style?.bold,
+        })
         if (text) g.appendChild(text)
       }
     }

@@ -4,7 +4,18 @@ import { attr, directChild } from '../import/xml'
 import { txBodyToHTML } from '../import/elements/text'
 import { emu2pxF, svgEl, type PreviewCtx, type Box } from './svg'
 
-export async function renderText(txBody: Element, ctx: PreviewCtx, box: Box): Promise<SVGElement | null> {
+/** 容器级文字默认样式（表格单元格等宿主环境声明、run 未显式覆盖时经 CSS 继承生效） */
+export interface TextHostDefaults {
+  color?: string
+  bold?: boolean
+}
+
+export async function renderText(
+  txBody: Element,
+  ctx: PreviewCtx,
+  box: Box,
+  hostDefaults?: TextHostDefaults,
+): Promise<SVGElement | null> {
   const body = await txBodyToHTML(txBody, ctx.theme, ctx.pkg, ctx.partPath)
   const bodyPr = directChild(txBody, 'a:bodyPr')
   // 内边距 EMU 默认值：lIns/rIns 91440、tIns/bIns 45720
@@ -25,6 +36,8 @@ export async function renderText(txBody: Element, ctx: PreviewCtx, box: Box): Pr
     justify ? `display:flex;flex-direction:column;justify-content:${justify}` : '',
     vert === 'vert' || vert === 'eaVert' || vert === 'mongolianVert' ? 'writing-mode:vertical-rl' : '',
     attr(bodyPr, 'wrap') === 'none' ? 'white-space:nowrap' : '',
+    hostDefaults?.color ? `color:${hostDefaults.color}` : '',
+    hostDefaults?.bold ? 'font-weight:bold' : '',
   ].filter(Boolean).join(';'))
   div.innerHTML = body.html
   fo.appendChild(div)

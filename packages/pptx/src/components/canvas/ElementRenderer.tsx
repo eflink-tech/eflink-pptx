@@ -329,8 +329,11 @@ function TableItem({
                     key={c}
                     colSpan={cell.colspan && cell.colspan > 1 ? cell.colspan : undefined}
                     rowSpan={cell.rowspan && cell.rowspan > 1 ? cell.rowspan : undefined}
-                    className="relative border border-[#e0e0e0] px-2 align-middle"
+                    className="relative border px-2 align-middle"
                     style={{
+                      // 边框色：单元格声明（导入 tcPr / 表格样式）优先，未声明回退编辑器默认浅灰
+                      borderColor: st?.bordercolor ?? '#e0e0e0',
+                      borderWidth: st?.borderwidth ? `${st.borderwidth}px` : undefined,
                       color: st?.color, background: st?.backcolor,
                       fontSize: st?.fontsize, fontFamily: st?.fontface,
                       fontWeight: st?.bold ? 700 : undefined,

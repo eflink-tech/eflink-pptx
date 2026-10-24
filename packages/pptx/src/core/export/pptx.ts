@@ -444,6 +444,10 @@ async function exportTable(_slide: Slide, el: TableElement): Promise<object> {
         fontSize: cell.style?.fontsize ? PT(cell.style.fontsize) : PT(14),
         align: cell.style?.align ?? 'left',
         valign: cell.style?.valign === 'top' ? 'top' : cell.style?.valign === 'bottom' ? 'bottom' : 'middle',
+        // 导入还原的单元格边框（tcPr / 表格样式网格线）逐格写回
+        border: cell.style?.bordercolor
+          ? { type: 'solid', color: normColor(cell.style.bordercolor) ?? 'D0D0D0', pt: cell.style.borderwidth ?? 1 }
+          : undefined,
       },
     })))
   return {

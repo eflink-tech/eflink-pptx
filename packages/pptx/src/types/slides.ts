@@ -216,6 +216,10 @@ export interface TableCell {
     fontface?: string
     align?: 'left' | 'center' | 'right'
     valign?: 'top' | 'middle' | 'bottom'
+    /** 单元格边框色（导入自 tcPr lnL/T/R/B 或表格样式网格线） */
+    bordercolor?: string
+    /** 边框宽（px） */
+    borderwidth?: number
   }
 }
 

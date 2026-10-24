@@ -2,7 +2,7 @@
 import { attr, directChild, directChildren, firstDescendant } from '../xml'
 import { resolveColor } from '../styles'
 import { custGeomToPath, presetGeomToPath, getShapeKey } from '../geometry'
-import { txBodyToHTML, defRPrOf } from './text'
+import { txBodyToHTML, defRPrOf, lstAlgnOf } from './text'
 import { fontStackOf } from '../fonts'
 import { genId } from '../../utils/id'
 import { mapX, mapY, addSkipped } from '../context'
@@ -223,7 +223,10 @@ export async function parseShapeEl(
       const ea = attr((rPr ? directChild(rPr, 'a:ea') : null) ?? (defRPr ? directChild(defRPr, 'a:ea') : null), 'typeface')
       if (latin || ea) shape.defaultFontName = fontStackOf(latin, ea, ctx.theme)
       const firstP = firstDescendant(txBody, 'a:p')
-      shape.align = alignFromAlgn(firstP ? attr(directChild(firstP, 'a:pPr'), 'algn') : null)
+      // 段落显式 pPr@algn 缺失时回退 lstStyle lvl1pPr@algn（叠加文本框常只有 lstStyle 声明居中）
+      const firstAlgn = (firstP ? attr(directChild(firstP, 'a:pPr'), 'algn') : null)
+        ?? lstAlgnOf(directChild(txBody, 'a:lstStyle'), 0)
+      shape.align = alignFromAlgn(firstAlgn)
       const bodyPr = directChild(txBody, 'a:bodyPr')
       const anchor = attr(bodyPr, 'anchor')
       shape.valign = anchor === 't' ? 'top' : anchor === 'b' ? 'bottom' : 'middle'

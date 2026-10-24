@@ -2,8 +2,11 @@
 /** p:graphicFrame(a:tbl) → table 元素（首 run 样式提取；gridSpan/rowSpan/vMerge/hMerge 矩阵） */
 import { attr, directChild, directChildren, firstDescendant } from '../xml'
 import { resolveColor } from '../styles'
+import { fontStackOf } from '../fonts'
 import { genId } from '../../utils/id'
 import { parseFrameGeom } from './frame-geom'
+import { lstAlgnOf } from './text'
+import { partsForCell, resolveTableStyle, type ResolvedTableStyle } from './table-style'
 import type { GroupXform, ParseContext } from '../context'
 import type { PptxPackage } from '../package'
 import type { PptxTheme } from '../theme'
@@ -18,8 +21,9 @@ function cellTextOf(tc: Element): string {
     .trim()
 }
 
-function cellStyleOf(tc: Element, theme: PptxTheme): TableCell['style'] {
-  const style: NonNullable<TableCell['style']> = { color: '#333333', align: 'left', valign: 'middle' }
+/** 单元格显式样式（仅提取源文件声明的属性，表格样式层叠与默认值由调用方补齐） */
+function cellStyleOf(tc: Element, theme: PptxTheme): NonNullable<TableCell['style']> {
+  const style: NonNullable<TableCell['style']> = {}
   const txBody = firstDescendant(tc, 'a:txBody')
   const firstRun = txBody ? firstDescendant(txBody, 'a:r') : null
   const rPr = firstRun ? directChild(firstRun, 'a:rPr') : null
@@ -31,21 +35,45 @@ function cellStyleOf(tc: Element, theme: PptxTheme): TableCell['style'] {
     if (color) style.color = color
     const sz = attr(rPr, 'sz')
     if (sz) style.fontsize = Math.round(parseInt(sz, 10) / 100 / 0.75)
+    const latin = attr(directChild(rPr, 'a:latin'), 'typeface')
+    const ea = attr(directChild(rPr, 'a:ea'), 'typeface')
+    if (latin || ea) style.fontface = fontStackOf(latin ?? '+mn-lt', ea ?? '+mn-ea', theme)
   }
   const firstP = txBody ? firstDescendant(txBody, 'a:p') : null
-  const algn = firstP ? attr(directChild(firstP, 'a:pPr'), 'algn') : null
+  const algn = (firstP ? attr(directChild(firstP, 'a:pPr'), 'algn') : null)
+    ?? lstAlgnOf(txBody ? directChild(txBody, 'a:lstStyle') : null, 0)
   if (algn === 'ctr') style.align = 'center'
   else if (algn === 'r') style.align = 'right'
   const tcPr = directChild(tc, 'a:tcPr')
-  const fill = tcPr ? resolveColor(directChild(tcPr, 'a:solidFill'), theme) : undefined
-  if (fill) style.backcolor = fill
+  if (tcPr) {
+    const fill = resolveColor(directChild(tcPr, 'a:solidFill'), theme)
+    if (fill) style.backcolor = fill
+    // 垂直对齐：tcPr@anchor（OOXML 缺省 top；编辑器渲染默认 middle，显式化保证一致）
+    const anchor = attr(tcPr, 'anchor')
+    if (anchor === 'ctr') style.valign = 'middle'
+    else if (anchor === 'b') style.valign = 'bottom'
+    else if (anchor === 't') style.valign = 'top'
+    // 边框：四边取首个带填充色的 ln（源文件几乎总是四边同色；noFill 边跳过）
+    const borderNames = ['a:lnL', 'a:lnT', 'a:lnR', 'a:lnB'] as const
+    let borderEmu = 0
+    for (const name of borderNames) {
+      const ln = directChild(tcPr, name)
+      if (!ln) continue
+      const color = resolveColor(directChild(ln, 'a:solidFill'), theme)
+      if (!color) continue
+      style.bordercolor = color
+      borderEmu = parseInt(attr(ln, 'w') ?? '0', 10)
+      break
+    }
+    if (style.bordercolor) style.borderwidth = Math.max(1, Math.round(borderEmu / 9525))
+  }
   return style
 }
 
 /** a:tbl → cells 矩阵（合并原点带 colspan/rowspan，被并格为 null）；
  * tcEls 为对应源 a:tc 元素矩阵（预览层富文本用），与 cells 逐位同步，改动 cells 逻辑时必须同步维护：
  * 普通格=元素，合并占位/覆盖区=null */
-export function buildCellMatrix(tbl: Element, theme: PptxTheme): {
+export function buildCellMatrix(tbl: Element, theme: PptxTheme, tblStyle?: ResolvedTableStyle): {
   cells: Array<Array<TableCell | null>>
   tcEls: Array<Array<Element | null>>
 } {
@@ -58,6 +86,7 @@ export function buildCellMatrix(tbl: Element, theme: PptxTheme): {
     tcEls.push([])
     occupied.push([])
   }
+  const colCount = directChildren(firstDescendant(tbl, 'a:tblGrid') ?? tbl, 'a:gridCol').length
   trs.forEach((tr, r) => {
     let c = 0
     for (const tc of directChildren(tr, 'a:tc')) {
@@ -73,11 +102,33 @@ export function buildCellMatrix(tbl: Element, theme: PptxTheme): {
       while (occupied[r][c]) c += 1
       const colspan = parseInt(attr(tc, 'gridSpan') ?? '1', 10) || 1
       const rowspan = parseInt(attr(tc, 'rowSpan') ?? '1', 10) || 1
+      const style = cellStyleOf(tc, theme)
+      // 表格样式层叠（低→高，后者覆盖前者）：wholeTbl < band < first/last Row/Col；
+      // 合成结果仅补单元格未显式声明的属性（tcPr 填充 / run 样式始终最高优先）
+      if (tblStyle) {
+        const layer: { fill?: string; color?: string; bold?: boolean; border?: string } = {}
+        for (const part of partsForCell(tblStyle, r, c, trs.length, colCount)) {
+          if (part.fill) layer.fill = part.fill
+          if (part.color) layer.color = part.color
+          if (part.bold) layer.bold = true
+          if (part.border) layer.border = part.border
+        }
+        if (!style.backcolor && layer.fill) style.backcolor = layer.fill
+        if (!style.color && layer.color) style.color = layer.color
+        if (layer.bold && style.bold !== true) style.bold = true
+        if (!style.bordercolor && layer.border) {
+          style.bordercolor = layer.border
+          style.borderwidth = 1
+        }
+      }
+      if (!style.color) style.color = '#333333'
+      if (!style.align) style.align = 'left'
+      if (!style.valign) style.valign = 'middle'
       cells[r][c] = {
         text: cellTextOf(tc),
         colspan: colspan > 1 ? colspan : undefined,
         rowspan: rowspan > 1 ? rowspan : undefined,
-        style: cellStyleOf(tc, theme),
+        style,
       }
       tcEls[r][c] = tc
       // 覆盖区标记占用，并把被并格填充为 null（cells 与 tcEls 同步）
@@ -111,6 +162,7 @@ export async function parseTableEl(
 
   const tbl = firstDescendant(node, 'a:tbl')
   if (!tbl) return null
+  const tblStyle = await resolveTableStyle(tbl, ctx.pkg, ctx.theme)
   const gridCols = directChildren(firstDescendant(node, 'a:tblGrid') ?? tbl, 'a:gridCol')
   const colSizesRaw = gridCols.map((c) => parseInt(attr(c, 'w') ?? '0', 10))
   const colTotal = colSizesRaw.reduce((a, b) => a + b, 0) || 1
@@ -118,12 +170,17 @@ export async function parseTableEl(
   const rowSizesRaw = trs.map((tr) => parseInt(attr(tr, 'h') ?? '0', 10))
   const rowTotal = rowSizesRaw.reduce((a, b) => a + b, 0) || 1
 
-  const { cells } = buildCellMatrix(tbl, ctx.theme)
+  const { cells } = buildCellMatrix(tbl, ctx.theme, tblStyle)
   const table: TableElement = {
     id: genId('tb-'), type: 'table', x, y, w, h,
     colSizes: colSizesRaw.map((c) => c / colTotal),
     rowSizes: rowSizesRaw.map((r) => r / rowTotal),
     cells, name: '表格',
+  }
+  // 表格外框与单元格边框同源：取首个带边框色的单元格（含表格样式网格线），避免外灰内黑的混搭
+  const firstBorder = cells.flat().find((cell) => cell?.style?.bordercolor)
+  if (firstBorder?.style?.bordercolor) {
+    table.outline = { color: firstBorder.style.bordercolor, width: firstBorder.style.borderwidth ?? 1, style: 'solid' }
   }
   return table
 }

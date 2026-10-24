@@ -84,6 +84,15 @@ export function defRPrOf(lst: Element | null, lvl: number): Element | null {
   return lvlPr ? directChild(lvlPr, 'a:defRPr') : null
 }
 
+/** lstStyle → 段落默认对齐（a:lvl{N}pPr@algn，未命中回退 a:defPPr）。
+ * 大量源文件段落不写显式 a:pPr，对齐只声明在 lstStyle（如叠加在形状上的居中文本框），
+ * 缺此回退会把居中文字渲染成左对齐 */
+export function lstAlgnOf(lst: Element | null, lvl: number): string | null {
+  if (!lst) return null
+  const lvlPr = directChild(lst, `a:lvl${lvl + 1}pPr`) ?? directChild(lst, 'a:defPPr')
+  return lvlPr ? attr(lvlPr, 'algn') : null
+}
+
 async function paragraphToInner(p: Element, theme: PptxTheme, pkg: PptxPackage | undefined, partPath: string, lst: Element | null): Promise<string> {
   const pPr = directChild(p, 'a:pPr')
   const lvlRaw = parseInt(attr(pPr, 'lvl') ?? '0', 10)
@@ -142,12 +151,16 @@ export async function txBodyToHTML(
     anchorRaw === 'ctr' || anchorRaw === 'b' || anchorRaw === 't' ? anchorRaw : null
 
   const paragraphs = directChildren(txBody, 'a:p')
+  const lst = directChild(txBody, 'a:lstStyle')
   const paras: ParaInfo[] = []
   for (const p of paragraphs) {
     const pPr = directChild(p, 'a:pPr')
-    const algn = attr(pPr, 'algn')
+    const lvlRaw = parseInt(attr(pPr, 'lvl') ?? '0', 10)
+    const lvl = Number.isFinite(lvlRaw) ? lvlRaw : 0
+    // 对齐回退链：显式 a:pPr@algn → lstStyle lvl{N}pPr@algn（OOXML 缺省左对齐）
+    const algn = attr(pPr, 'algn') ?? lstAlgnOf(lst, lvl)
     const align = algn === 'ctr' ? 'center' : algn === 'r' ? 'right' : algn === 'just' ? 'justify' : 'left'
-    const inner = await paragraphToInner(p, theme, pkg, partPath, directChild(txBody, 'a:lstStyle'))
+    const inner = await paragraphToInner(p, theme, pkg, partPath, lst)
     // 行距：spcPct（1/100000 → 倍数）优先，spcPts（1/100 pt → px）覆盖；val 非法/非正数时跳过，避免产出 line-height:0 压扁文字
     const lnSpc = pPr ? directChild(pPr, 'a:lnSpc') : null
     let spacing = ''

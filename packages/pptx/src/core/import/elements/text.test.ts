@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import JSZip from 'jszip'
-import { txBodyToHTML } from './text'
+import { txBodyToHTML, lstAlgnOf } from './text'
 import { PptxPackage } from '../package'
 import type { PptxTheme } from '../theme'
 
@@ -12,6 +12,36 @@ const theme: PptxTheme = {
 function el(xml: string): Element {
   return new DOMParser().parseFromString(xml, 'text/xml').documentElement
 }
+
+describe('txBodyToHTML 段落对齐回退', () => {
+  it('段落无显式 a:pPr 时回退 lstStyle lvl1pPr@algn（形状上叠加的居中文本框常见形态）', async () => {
+    const txBody = el(`<p:txBody xmlns:p="urn:p" xmlns:a="urn:a">
+      <a:bodyPr/>
+      <a:lstStyle><a:lvl1pPr algn="ctr"><a:defRPr sz="2000"/></a:lvl1pPr></a:lstStyle>
+      <a:p><a:r><a:t>居中文本</a:t></a:r></a:p>
+    </p:txBody>`)
+    const r = await txBodyToHTML(txBody, theme)
+    expect(r.html).toContain('text-align:center')
+  })
+
+  it('段落显式 algn 优先于 lstStyle；未声明对齐的段落保持左对齐', async () => {
+    const txBody = el(`<p:txBody xmlns:p="urn:p" xmlns:a="urn:a">
+      <a:lstStyle><a:lvl1pPr algn="ctr"/></a:lstStyle>
+      <a:p><a:pPr algn="r"/><a:r><a:t>右</a:t></a:r></a:p>
+      <a:p><a:r><a:t>回退居中</a:t></a:r></a:p>
+    </p:txBody>`)
+    const r = await txBodyToHTML(txBody, theme)
+    expect(r.html).toContain('text-align:right')
+    expect(r.html).toContain('text-align:center')
+  })
+
+  it('lstAlgnOf：lvl 命中 / 越级 miss / defPPr 兜底', () => {
+    const lst = el(`<a:lstStyle xmlns:a="urn:a"><a:lvl1pPr algn="ctr"/><a:defPPr algn="r"/></a:lstStyle>`)
+    expect(lstAlgnOf(lst, 0)).toBe('ctr')
+    expect(lstAlgnOf(lst, 2)).toBe('r')
+    expect(lstAlgnOf(null, 0)).toBeNull()
+  })
+})
 
 describe('txBodyToHTML', () => {
   it('基础 run：字号/加粗/颜色/对齐', async () => {

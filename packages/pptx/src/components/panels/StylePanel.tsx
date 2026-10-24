@@ -829,6 +829,10 @@ function TableSection({ el }: { el: PPTElement }) {
               onChange={(v) => upd((d) => {
                 if (d.type !== 'table') return
                 d.outline = { ...(d.outline ?? { width: 1, style: 'solid' }), color: v }
+                // 导入表格的边框存于各单元格（tcPr/表格样式），改表级边框时同步覆盖
+                for (const row of d.cells) for (const tc of row) {
+                  if (tc?.style) tc.style.bordercolor = v
+                }
               })}
               small
             />
@@ -841,6 +845,9 @@ function TableSection({ el }: { el: PPTElement }) {
               onChange={(v) => upd((d) => {
                 if (d.type !== 'table') return
                 d.outline = { ...(d.outline ?? { color: '#cccccc', style: 'solid' }), width: v }
+                for (const row of d.cells) for (const tc of row) {
+                  if (tc?.style) tc.style.borderwidth = v
+                }
               })}
               suffix="px"
             />
