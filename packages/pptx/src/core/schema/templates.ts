@@ -23,8 +23,12 @@ export interface PPTTemplate {
   name: string
   colors: string[]
   background: Background
-  build: () => Slide[]
+  build: (t?: Translate) => Slide[]
 }
+
+type Translate = (key: string, vars?: Record<string, string | number>) => string
+
+const tr = (t: Translate | undefined, key: string, fallback: string) => (t ? t(key) : fallback)
 
 interface Palette {
   id: string; name: string
@@ -43,15 +47,21 @@ const PALETTES: Palette[] = [
   { id: 'blue', name: '沉稳蓝', colors: ['#1e5eff', '#42a5f5', '#26c6da', '#5e6db8', '#f5c56b', '#0d1b3e'], bg: '#ffffff', accent: '#1e5eff', text: '#1f2733', sub: '#7a8699' },
 ]
 
-function buildSlides(p: Palette): Slide[] {
+function buildSlides(p: Palette, t?: Translate): Slide[] {
+  const coverTitle = tr(t, 'pptx.template.coverTitle', '演示文稿标题')
+  const coverSubtitle = tr(t, 'pptx.template.coverSubtitle', '副标题 · 汇报人 · 2026')
+  const contentTitle = tr(t, 'pptx.template.contentTitle', '内容页标题')
+  const bodyPlaceholder = tr(t, 'pptx.template.bodyPlaceholder', '左栏要点：描述核心观点，支持分行排版，保持简洁。')
+  const placeholder = tr(t, 'pptx.template.placeholder', '图示 / 数据占位')
+  const thanks = tr(t, 'pptx.template.thanks', '感谢观看')
   const cover: Slide = {
     id: genId('slide-'),
     background: { type: 'solid', color: p.bg },
     elements: [
       shape('rect', 0, 0, 1280, 720, p.accent, { opacity: 0.08 }),
       shape('rect', 0, 660, 1280, 60, p.accent),
-      text(120, 280, 1040, 110, `<p style="text-align:center"><span style="font-size:56px;color:${p.text}">演示文稿标题</span></p>`, { name: '封面标题' }),
-      text(240, 410, 800, 60, `<p style="text-align:center"><span style="font-size:22px;color:${p.sub}">副标题 · 汇报人 · 2026</span></p>`, { name: '封面副标题' }),
+      text(120, 280, 1040, 110, `<p style="text-align:center"><span style="font-size:56px;color:${p.text}">${coverTitle}</span></p>`, { name: '封面标题' }),
+      text(240, 410, 800, 60, `<p style="text-align:center"><span style="font-size:22px;color:${p.sub}">${coverSubtitle}</span></p>`, { name: '封面副标题' }),
       shape('rect', 560, 396, 160, 4, p.accent),
     ],
   }
@@ -60,17 +70,17 @@ function buildSlides(p: Palette): Slide[] {
     background: { type: 'solid', color: p.bg },
     elements: [
       shape('rect', 100, 92, 8, 44, p.accent),
-      text(128, 84, 900, 60, `<p><span style="font-size:32px;color:${p.text}">内容页标题</span></p>`, { name: '页标题' }),
-      text(128, 200, 480, 320, `<p><span style="font-size:20px;color:${p.sub}">左栏要点：描述核心观点，支持分行排版，保持简洁。</span></p>`, { name: '正文' }),
+      text(128, 84, 900, 60, `<p><span style="font-size:32px;color:${p.text}">${contentTitle}</span></p>`, { name: '页标题' }),
+      text(128, 200, 480, 320, `<p><span style="font-size:20px;color:${p.sub}">${bodyPlaceholder}</span></p>`, { name: '正文' }),
       shape('roundRect', 660, 200, 520, 320, p.colors[1], { opacity: 0.16 }),
-      text(700, 330, 440, 60, `<p style="text-align:center"><span style="font-size:20px;color:${p.text}">图示 / 数据占位</span></p>`, { name: '占位' }),
+      text(700, 330, 440, 60, `<p style="text-align:center"><span style="font-size:20px;color:${p.text}">${placeholder}</span></p>`, { name: '占位' }),
     ],
   }
   const end: Slide = {
     id: genId('slide-'),
     background: { type: 'solid', color: p.accent },
     elements: [
-      text(240, 300, 800, 100, `<p style="text-align:center"><span style="font-size:48px;color:#ffffff">感谢观看</span></p>`, { name: '结束' }),
+      text(240, 300, 800, 100, `<p style="text-align:center"><span style="font-size:48px;color:#ffffff">${thanks}</span></p>`, { name: '结束' }),
       text(340, 420, 600, 50, `<p style="text-align:center"><span style="font-size:20px;color:#ffffffcc">THANKS FOR WATCHING</span></p>`, { name: '结束副标题' }),
     ],
   }
@@ -82,7 +92,7 @@ export const PPT_TEMPLATES: PPTTemplate[] = PALETTES.map((p) => ({
   name: p.name,
   colors: p.colors,
   background: { type: 'solid', color: p.bg },
-  build: () => buildSlides(p),
+  build: (t?: Translate) => buildSlides(p, t),
 }))
 
 export function templateTheme(tpl: PPTTemplate): Partial<Theme> {

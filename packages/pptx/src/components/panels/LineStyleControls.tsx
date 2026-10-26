@@ -1,6 +1,7 @@
 // 线条属性面板：带预览图标的可视化控件
 import { useEffect, useRef, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
+import { useI18n } from '@eflink-tech/office-kit'
 import type { LineArrow, LineElement, LineStyle, LineType, PPTElement } from '../../types/slides'
 
 const VB = '0 0 40 24'
@@ -103,23 +104,23 @@ export function toLineArrow(v: 'none' | 'arrow' | 'triangle' | 'dot'): LineArrow
   return v === 'none' ? '' : v
 }
 
-const STYLE_OPTIONS: Array<{ value: LineStyle; label: string }> = [
-  { value: 'solid', label: '实线' },
-  { value: 'dashed', label: '虚线' },
-  { value: 'dotted', label: '点线' },
+const STYLE_OPTIONS: Array<{ value: LineStyle; key: string }> = [
+  { value: 'solid', key: 'pptx.style.lineStyleSolid' },
+  { value: 'dashed', key: 'pptx.style.lineStyleDashed' },
+  { value: 'dotted', key: 'pptx.style.lineStyleDotted' },
 ]
 
-const TYPE_OPTIONS: Array<{ value: LineType; label: string }> = [
-  { value: 'straight', label: '直线' },
-  { value: 'broken', label: '折线' },
-  { value: 'curve', label: '曲线' },
+const TYPE_OPTIONS: Array<{ value: LineType; key: string }> = [
+  { value: 'straight', key: 'pptx.style.lineTypeStraight' },
+  { value: 'broken', key: 'pptx.style.lineTypeBroken' },
+  { value: 'curve', key: 'pptx.style.lineTypeCurve' },
 ]
 
-const ARROW_OPTIONS: Array<{ value: 'none' | 'arrow' | 'triangle' | 'dot'; label: string }> = [
-  { value: 'none', label: '无' },
-  { value: 'arrow', label: '箭头' },
-  { value: 'triangle', label: '三角' },
-  { value: 'dot', label: '圆点' },
+const ARROW_OPTIONS: Array<{ value: 'none' | 'arrow' | 'triangle' | 'dot'; key: string }> = [
+  { value: 'none', key: 'pptx.style.arrowNone' },
+  { value: 'arrow', key: 'pptx.style.arrowArrow' },
+  { value: 'triangle', key: 'pptx.style.arrowTriangle' },
+  { value: 'dot', key: 'pptx.style.arrowDot' },
 ]
 
 /** 三选一图标分段按钮 */
@@ -222,24 +223,29 @@ export function LineStyleSection({
   el: LineElement
   upd: (fn: (d: PPTElement) => void) => void
 }) {
+  const { t } = useI18n()
+  const styleOptions = STYLE_OPTIONS.map((o) => ({ value: o.value, label: t(o.key) }))
+  const typeOptions = TYPE_OPTIONS.map((o) => ({ value: o.value, label: t(o.key) }))
+  const arrowOptions = ARROW_OPTIONS.map((o) => ({ value: o.value, label: t(o.key) }))
+
   return (
     <>
       <div className="grid grid-cols-2 gap-2">
         <div className="col-span-2">
-          <div className="mb-1 text-xs text-gray-500">样式</div>
+          <div className="mb-1 text-xs text-gray-500">{t('pptx.style.lineStyle')}</div>
           <SegmentedPicker
             value={el.lineStyle ?? 'solid'}
-            options={STYLE_OPTIONS}
+            options={styleOptions}
             onChange={(v) => upd((d) => { if (d.type === 'line') d.lineStyle = v })}
             renderIcon={(v) => <LineStylePreview style={v} />}
           />
         </div>
       </div>
       <div>
-        <div className="mb-1 text-xs text-gray-500">类型</div>
+        <div className="mb-1 text-xs text-gray-500">{t('pptx.style.lineType')}</div>
         <SegmentedPicker
           value={el.lineType ?? 'straight'}
-          options={TYPE_OPTIONS}
+          options={typeOptions}
           onChange={(v) => {
             if (v === 'straight') {
               upd((d) => { if (d.type === 'line') { d.lineType = 'straight'; d.points = undefined } })
@@ -254,19 +260,19 @@ export function LineStyleSection({
       </div>
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <div className="mb-1 text-xs text-gray-500">起点箭头</div>
+          <div className="mb-1 text-xs text-gray-500">{t('pptx.style.startArrow')}</div>
           <VisualDropdown
             value={normalizeArrow(el.startArrow)}
-            options={ARROW_OPTIONS}
+            options={arrowOptions}
             onChange={(v) => upd((d) => { if (d.type === 'line') d.startArrow = toLineArrow(v) })}
             renderIcon={(v) => <LineArrowPreview arrow={v} at="start" />}
           />
         </div>
         <div>
-          <div className="mb-1 text-xs text-gray-500">终点箭头</div>
+          <div className="mb-1 text-xs text-gray-500">{t('pptx.style.endArrow')}</div>
           <VisualDropdown
             value={normalizeArrow(el.endArrow)}
-            options={ARROW_OPTIONS}
+            options={arrowOptions}
             onChange={(v) => upd((d) => { if (d.type === 'line') d.endArrow = toLineArrow(v) })}
             renderIcon={(v) => <LineArrowPreview arrow={v} at="end" />}
           />

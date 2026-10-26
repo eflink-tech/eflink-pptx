@@ -4,9 +4,11 @@
 // 保存策略：内容变化立即写 localStorage 镜像（毫秒级防崩溃，本地草稿，不清除 dirty）；
 // 云端保存仅由手动触发（⌘S/Ctrl+S、顶栏保存按钮、分享前强制保存、window bridge save）。
 import { useEffect, useState, type JSX } from 'react'
+import { I18nProvider, useI18n, type OfficeLocale } from '@eflink-tech/office-kit'
 import { AppLayout } from './components/layout/AppLayout'
 import { loadStartupDoc, saveDoc, writeMirror } from './core/editor/persistence'
 import { useEditorStore } from './store/editorStore'
+import { PPTX_MESSAGES } from './i18n/messages'
 
 /** window bridge 契约：宿主/自动化查询脏状态、手动触发云端保存、丢弃本地草稿 */
 interface EflinkEditorBridge {
@@ -19,14 +21,33 @@ interface EflinkEditorBridge {
  * 组件入口：渲染即获得完整编辑器（顶栏 / 缩略图 / 画布 / 样式面板 / 放映 / AI 助手）
  * @param bootDocId 指定启动文档 id（如分享查看页注入的只读快照），优先于本地"上次文档"
  */
-export function PptxEditor({ bootDocId }: { bootDocId?: string } = {}): JSX.Element {
+export interface PptxEditorProps {
+  /** 指定启动文档 id（如分享查看页注入的只读快照），优先于本地"上次文档" */
+  bootDocId?: string
+  /** 界面语言，默认中文 */
+  locale?: OfficeLocale
+}
+
+/**
+ * 组件入口：渲染即获得完整编辑器（顶栏 / 缩略图 / 画布 / 样式面板 / 放映 / AI 助手）
+ */
+export function PptxEditor({ locale = 'zh-CN', bootDocId }: PptxEditorProps = {}): JSX.Element {
+  return (
+    <I18nProvider locale={locale} messages={PPTX_MESSAGES}>
+      <PptxEditorInner bootDocId={bootDocId} />
+    </I18nProvider>
+  )
+}
+
+function PptxEditorInner({ bootDocId }: { bootDocId?: string }): JSX.Element {
+  const { t } = useI18n()
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
     let cancelled = false
     let unsubscribe: (() => void) | undefined
     void (async () => {
-      const doc = await loadStartupDoc(bootDocId)
+      const doc = await loadStartupDoc(bootDocId, t('pptx.untitled'))
       if (cancelled) return
       useEditorStore.getState().loadDocument(doc)
 
@@ -78,7 +99,7 @@ export function PptxEditor({ bootDocId }: { bootDocId?: string } = {}): JSX.Elem
   }, [ready])
 
   if (!ready) {
-    return <div className="flex h-full items-center justify-center text-sm text-slate-400">加载中…</div>
+    return <div className="flex h-full items-center justify-center text-sm text-slate-400">{t('shell.loading')}</div>
   }
   return <AppLayout />
 }

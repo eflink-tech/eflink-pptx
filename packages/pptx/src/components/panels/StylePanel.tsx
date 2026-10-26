@@ -1,12 +1,13 @@
 // 右侧样式面板：卡片式分组布局，紧凑排列
 import { useState } from 'react'
+import { useI18n } from '@eflink-tech/office-kit'
 import { useEditorStore } from '../../store/editorStore'
 import { useUIStore } from '../../store/uiStore'
 import type { ChartElement, PPTElement, ShapeElement, TableCell } from '../../types/slides'
 import { type AlignMode } from '../../core/utils/align'
 import { SHAPE_PATHS } from '../../core/render/shape'
 import type { TransitionPreset } from '../../types/slides'
-import { chartTypeGroups, effectOptions, transitionPresets } from './options'
+import { chartTypeGroups, animEffectOptions, transitionPresets } from './options'
 import { DEFAULT_CHART_COLORS } from '../canvas/ChartRenderer'
 import { CHART_PALETTES, DEFAULT_CHART_ELEMENTS, type ChartElements } from '../../core/chart/chartOptions'
 import {
@@ -197,17 +198,18 @@ function ToggleField({ label, checked, onChange, icon }: { label: string; checke
 export function StylePanel() {
   const tab = useUIStore((s) => s.rightPanelTab)
   const setTab = useUIStore((s) => s.setRightPanelTab)
+  const { t } = useI18n()
 
   return (
     <div className="flex h-full w-[260px] shrink-0 flex-col border-l border-gray-200 bg-white" data-testid="style-panel">
       <div className="flex border-b border-gray-100 text-xs">
-        {([['style', '样式'], ['animation', '动画'], ['comment', '批注']] as const).map(([key, label]) => (
+        {([['style', 'pptx.panel.style'], ['animation', 'pptx.panel.animation'], ['comment', 'pptx.panel.comment']] as const).map(([key, label]) => (
           <button
             key={key}
             className={`flex-1 py-2 text-center ${tab === key ? 'border-b-2 border-[#d14424] font-medium text-[#d14424]' : 'text-gray-500 hover:text-gray-700'}`}
             onClick={() => setTab(key)}
           >
-            {label}
+            {t(label)}
           </button>
         ))}
       </div>
@@ -225,6 +227,7 @@ export function StylePanel() {
 function StyleTab() {
   const selectedIds = useEditorStore((s) => s.selectedIds)
   const slide = useEditorStore((s) => s.presentation.slides[s.slideIndex])
+  const { t } = useI18n()
 
   if (!slide) return null
   const selected = slide.elements.filter((el) => selectedIds.includes(el.id))
@@ -243,7 +246,7 @@ function StyleTab() {
     return (
       <div>
         <div className="mb-2 rounded-lg bg-[#fbeae5] px-3 py-1.5 text-xs font-medium text-[#d14424]">
-          {typeLabel(el)}
+          {typeLabel(el, t)}
         </div>
         <ElementSection el={el} />
         <ArrangeSection selectedIds={selectedIds} />
@@ -254,10 +257,10 @@ function StyleTab() {
   return (
     <div>
       <div className="mb-2 rounded-lg bg-[#fbeae5] px-3 py-1.5 text-xs font-medium text-[#d14424]">
-        已选 {selected.length} 个元素
+        {t('pptx.panel.selected', { count: selected.length })}
       </div>
-      <Section title="通用">
-        <Field label="不透明度">
+      <Section title={t('pptx.style.general')}>
+        <Field label={t('pptx.style.opacity')}>
           <div className="flex items-center gap-2">
             <input
               type="range"
@@ -290,10 +293,10 @@ function StyleTab() {
   )
 }
 
-function typeLabel(el: PPTElement): string {
+function typeLabel(el: PPTElement, t: (key: string) => string): string {
   const map: Record<PPTElement['type'], string> = {
-    text: '文本', image: '图片', shape: '形状', line: '线条', table: '表格',
-    chart: '图表', video: '视频', audio: '音频', formula: '公式',
+    text: t('pptx.el.text'), image: t('pptx.el.image'), shape: t('pptx.el.shape'), line: t('pptx.el.line'), table: t('pptx.el.table'),
+    chart: t('pptx.el.chart'), video: t('pptx.el.video'), audio: t('pptx.el.audio'), formula: t('pptx.el.formula'),
   }
   return map[el.type]
 }
@@ -301,13 +304,14 @@ function typeLabel(el: PPTElement): string {
 /* 页面设置（未选中元素时） */
 function PageSection() {
   const slide = useEditorStore((s) => s.presentation.slides[s.slideIndex])
+  const { t } = useI18n()
   if (!slide) return null
   const bg = slide.background ?? { type: 'solid' as const, color: '#ffffff' }
 
   return (
     <div>
-      <Section title="页面背景">
-        <Field label="类型">
+      <Section title={t('pptx.style.background')}>
+        <Field label={t('pptx.style.type')}>
           <SelectInput
             testId="bg-type"
             value={bg.type}
@@ -319,42 +323,42 @@ function PageSection() {
               else store.setSlideBackground({ type: 'image', image: { src: '', size: 'cover' } })
             }}
             options={[
-              { value: 'solid', label: '纯色' },
-              { value: 'gradient', label: '渐变' },
-              { value: 'image', label: '图片' },
+              { value: 'solid', label: t('pptx.style.solid') },
+              { value: 'gradient', label: t('pptx.style.gradient') },
+              { value: 'image', label: t('pptx.style.image') },
             ]}
           />
         </Field>
         {bg.type === 'solid' && (
-          <Field label="颜色">
+          <Field label={t('pptx.style.color')}>
             <ColorInput value={bg.color} onChange={(v) => useEditorStore.getState().setSlideBackground({ color: v })} />
           </Field>
         )}
         {bg.type === 'gradient' && bg.gradient && (
           <>
-            <Field label="起始色">
+            <Field label={t('pptx.style.startColor')}>
               <ColorInput value={bg.gradient.colors[0]?.color} onChange={(v) => {
                 const colors = [...bg.gradient!.colors]
                 colors[0] = { ...colors[0], color: v }
                 useEditorStore.getState().setSlideBackground({ gradient: { ...bg.gradient!, colors } })
               }} />
             </Field>
-            <Field label="结束色">
+            <Field label={t('pptx.style.endColor')}>
               <ColorInput value={bg.gradient.colors[1]?.color} onChange={(v) => {
                 const colors = [...bg.gradient!.colors]
                 colors[1] = { ...colors[1] ?? { pos: 100 }, color: v }
                 useEditorStore.getState().setSlideBackground({ gradient: { ...bg.gradient!, colors } })
               }} />
             </Field>
-            <Field label="角度">
+            <Field label={t('pptx.style.angle')}>
               <NumberInput value={bg.gradient.rotate ?? 90} onChange={(v) => useEditorStore.getState().setSlideBackground({ gradient: { ...bg.gradient!, rotate: v } })} suffix="°" />
             </Field>
           </>
         )}
         {bg.type === 'image' && (
-          <Field label="图片">
+          <Field label={t('pptx.style.image')}>
             <label className="cursor-pointer rounded border border-gray-200 px-2 py-1 text-xs hover:bg-gray-50">
-              选择文件
+              {t('pptx.style.chooseFile')}
               <input
                 type="file"
                 accept="image/*"
@@ -371,8 +375,8 @@ function PageSection() {
           </Field>
         )}
       </Section>
-      <Section title="画布比例">
-        <Field label="比例">
+      <Section title={t('pptx.style.canvasRatio')}>
+        <Field label={t('pptx.style.ratio')}>
           <SelectInput
             testId="canvas-ratio"
             value={String(useEditorStore.getState().presentation.viewportRatio)}
@@ -390,16 +394,16 @@ function PageSection() {
           />
         </Field>
       </Section>
-      <Section title="切换动画">
-        <Field label="效果">
+      <Section title={t('pptx.style.transition')}>
+        <Field label={t('pptx.style.effect')}>
           <SelectInput
             testId="transition-effect"
             value={slide.transition?.preset ?? 'none'}
             onChange={(v) => useEditorStore.getState().setSlideTransition({ preset: v as TransitionPreset })}
-            options={transitionPresets}
+            options={transitionPresets(t)}
           />
         </Field>
-        <Field label="时长">
+        <Field label={t('pptx.style.duration')}>
           <NumberInput value={slide.transition?.duration ?? 500} onChange={(v) => useEditorStore.getState().setSlideTransition({ duration: v })} suffix="ms" step={100} />
         </Field>
       </Section>
@@ -410,6 +414,7 @@ function PageSection() {
 /* 元素样式分区（按类型） */
 function ElementSection({ el }: { el: PPTElement }) {
   const [formulaDialogOpen, setFormulaDialogOpen] = useState(false)
+  const { t } = useI18n()
   const pushThen = (fn: () => void) => {
     const store = useEditorStore.getState()
     store.pushHistory()
@@ -426,32 +431,32 @@ function ElementSection({ el }: { el: PPTElement }) {
       {/* 文本元素 */}
       {el.type === 'text' && (
         <>
-          <Field label="文字色">
+          <Field label={t('pptx.style.textColor')}>
             <ColorInput value={el.defaultColor} onChange={(v) => upd((d) => { if (d.type === 'text') d.defaultColor = v })} />
           </Field>
           <div className="grid grid-cols-2 gap-x-2 gap-y-1">
-            <Field label="行高">
+            <Field label={t('pptx.style.lineHeight')}>
               <NumberInput value={el.lineHeight ?? 1.5} step={0.1} min={0.5} max={4} onChange={(v) => upd((d) => { if (d.type === 'text') d.lineHeight = v })} />
             </Field>
-            <Field label="字间距">
+            <Field label={t('pptx.style.charSpacing')}>
               <NumberInput value={el.charSpace ?? 0} onChange={(v) => upd((d) => { if (d.type === 'text') d.charSpace = v })} suffix="px" />
             </Field>
-            <Field label="内边距">
+            <Field label={t('pptx.style.padding')}>
               <NumberInput value={el.padding ?? 8} onChange={(v) => upd((d) => { if (d.type === 'text') d.padding = v })} suffix="px" />
             </Field>
           </div>
           <div className="mt-1 space-y-0.5 rounded-md bg-white px-1">
-            <ToggleField label="竖排" checked={el.vertical ?? false} onChange={(v) => upd((d) => { if (d.type === 'text') d.vertical = v })} />
-            <ToggleField label="自动收缩" checked={el.autoSize ?? false} onChange={(v) => upd((d) => { if (d.type === 'text') d.autoSize = v })} />
+            <ToggleField label={t('pptx.style.vertical')} checked={el.vertical ?? false} onChange={(v) => upd((d) => { if (d.type === 'text') d.vertical = v })} />
+            <ToggleField label={t('pptx.style.autoFit')} checked={el.autoSize ?? false} onChange={(v) => upd((d) => { if (d.type === 'text') d.autoSize = v })} />
           </div>
         </>
       )}
 
       {/* 文本特效 */}
       {el.type === 'text' && (
-        <Section title="文本特效" defaultOpen={false}>
+        <Section title={t('pptx.style.textEffects')} defaultOpen={false}>
           <ToggleField
-            label="描边"
+            label={t('pptx.style.stroke')}
             checked={Boolean(el.textStroke)}
             onChange={(v) => upd((d) => {
               if (d.type !== 'text') return
@@ -465,7 +470,7 @@ function ElementSection({ el }: { el: PPTElement }) {
             </div>
           )}
           <ToggleField
-            label="文字阴影"
+            label={t('pptx.style.textShadow')}
             checked={Boolean(el.shadow)}
             onChange={(e) => upd((d) => {
               if (d.type !== 'text') return
@@ -477,44 +482,44 @@ function ElementSection({ el }: { el: PPTElement }) {
 
       {/* 图片元素 */}
       {el.type === 'image' && (
-        <Section title="图片样式" defaultOpen>
+        <Section title={t('pptx.style.imageStyle')} defaultOpen>
           <div className="grid grid-cols-2 gap-2">
-            <Field label="圆角">
+            <Field label={t('pptx.style.radius')}>
               <NumberInput value={el.radius ?? 0} onChange={(v) => upd((d) => { if (d.type === 'image') d.radius = v })} suffix="px" max={200} />
             </Field>
-            <Field label="裁剪形状">
+            <Field label={t('pptx.style.clipShape')}>
               <SelectInput
                 value={el.clipShape ?? ''}
                 onChange={(v) => upd((d) => { if (d.type === 'image') d.clipShape = v || undefined })}
                 options={[
-                  { value: '', label: '无' },
-                  { value: 'ellipse', label: '圆形' },
-                  { value: 'roundRect', label: '圆角矩形' },
-                  { value: 'triangle', label: '三角形' },
-                  { value: 'diamond', label: '菱形' },
-                  { value: 'hexagon', label: '六边形' },
-                  { value: 'star5', label: '五角星' },
-                  { value: 'heart', label: '心形' },
-                  { value: 'cloud', label: '云朵' },
+                  { value: '', label: t('pptx.style.none') },
+                  { value: 'ellipse', label: t('pptx.style.circle') },
+                  { value: 'roundRect', label: t('pptx.style.roundedRect') },
+                  { value: 'triangle', label: t('pptx.style.triangle') },
+                  { value: 'diamond', label: t('pptx.style.diamond') },
+                  { value: 'hexagon', label: t('pptx.style.hexagon') },
+                  { value: 'star5', label: t('pptx.style.star') },
+                  { value: 'heart', label: t('pptx.style.heart') },
+                  { value: 'cloud', label: t('pptx.style.cloud') },
                 ]}
               />
             </Field>
           </div>
-          <Field label="翻转">
+          <Field label={t('pptx.style.flip')}>
             <div className="flex gap-0.5">
-              <IconButton icon={<FlipHorizontal size={14} />} title="水平翻转" onClick={() => upd((d) => { if (d.type === 'image') d.flipH = !d.flipH })} active={el.flipH} />
-              <IconButton icon={<FlipVertical size={14} />} title="垂直翻转" onClick={() => upd((d) => { if (d.type === 'image') d.flipV = !d.flipV })} active={el.flipV} />
+              <IconButton icon={<FlipHorizontal size={14} />} title={t('pptx.style.flipH')} onClick={() => upd((d) => { if (d.type === 'image') d.flipH = !d.flipH })} active={el.flipH} />
+              <IconButton icon={<FlipVertical size={14} />} title={t('pptx.style.flipV')} onClick={() => upd((d) => { if (d.type === 'image') d.flipV = !d.flipV })} active={el.flipV} />
             </div>
           </Field>
           <ToggleField
-            label="阴影"
+            label={t('pptx.style.shadow')}
             checked={Boolean(el.shadow)}
             onChange={(e) => upd((d) => {
               if (d.type !== 'image') return
               d.shadow = e ? { h: 4, v: 4, blur: 10, color: 'rgba(0,0,0,0.3)' } : undefined
             })}
           />
-          <Field label="边框">
+          <Field label={t('pptx.style.border')}>
             <div className="flex items-center gap-1">
               <ColorInput allowEmpty value={el.outline?.color} onChange={(v) => upd((d) => { if (d.type === 'image') d.outline = { color: v, width: 2, style: 'solid' } })} />
               <NumberInput value={el.outline?.width ?? 0} min={0} max={20} onChange={(v) => upd((d) => { if (d.type === 'image') d.outline = { color: el.outline?.color ?? '#333', width: v, style: 'solid' } })} suffix="px" />
@@ -527,12 +532,12 @@ function ElementSection({ el }: { el: PPTElement }) {
       {/* 形状元素 */}
       {el.type === 'shape' && (
         <>
-          <Section title="填充与边框" defaultOpen>
-            <Field label="填充">
+          <Section title={t('pptx.style.fillBorder')} defaultOpen>
+            <Field label={t('pptx.style.fill')}>
               <ColorInput allowEmpty value={typeof el.fill === 'string' ? el.fill : undefined} onChange={(v) => upd((d) => { if (d.type === 'shape') d.fill = v })} />
             </Field>
             <ToggleField
-              label="渐变填充"
+              label={t('pptx.style.gradientFill')}
               checked={typeof el.fill === 'object'}
               onChange={(e) => upd((d) => {
                 if (d.type !== 'shape') return
@@ -544,7 +549,7 @@ function ElementSection({ el }: { el: PPTElement }) {
             {typeof el.fill === 'object' && el.fill !== null && (
               <>
                 <div className="grid grid-cols-2 gap-2">
-                  <Field label="起色">
+                  <Field label={t('pptx.style.startColorShort')}>
                     <ColorInput value={el.fill.colors[0]?.color} onChange={(v) => upd((d) => {
                       if (d.type !== 'shape' || typeof d.fill !== 'object' || d.fill === null) return
                       const colors = [...d.fill.colors]
@@ -552,7 +557,7 @@ function ElementSection({ el }: { el: PPTElement }) {
                       d.fill = { ...d.fill, colors }
                     })} />
                   </Field>
-                  <Field label="止色">
+                  <Field label={t('pptx.style.endColorShort')}>
                     <ColorInput value={el.fill.colors[1]?.color} onChange={(v) => upd((d) => {
                       if (d.type !== 'shape' || typeof d.fill !== 'object' || d.fill === null) return
                       const colors = [...d.fill.colors]
@@ -561,7 +566,7 @@ function ElementSection({ el }: { el: PPTElement }) {
                     })} />
                   </Field>
                 </div>
-                <Field label="渐变角">
+                <Field label={t('pptx.style.gradientAngle')}>
                   <NumberInput value={typeof el.fill === 'object' && el.fill !== null ? el.fill.rotate ?? 90 : 90} onChange={(v) => upd((d) => {
                     if (d.type !== 'shape' || typeof d.fill !== 'object' || d.fill === null) return
                     d.fill = { ...d.fill, rotate: v }
@@ -570,15 +575,15 @@ function ElementSection({ el }: { el: PPTElement }) {
               </>
             )}
             <div className="grid grid-cols-2 gap-2">
-              <Field label="边框色">
+              <Field label={t('pptx.style.borderColor')}>
                 <ColorInput allowEmpty value={el.outline?.color} onChange={(v) => upd((d) => { if (d.type === 'shape') d.outline = { ...(d.outline ?? { width: 1, style: 'solid' }), color: v } })} />
               </Field>
-              <Field label="边框宽">
+              <Field label={t('pptx.style.borderWidth')}>
                 <NumberInput value={el.outline?.width ?? 0} min={0} max={20} onChange={(v) => upd((d) => { if (d.type === 'shape') d.outline = { ...(d.outline ?? { color: '#333', style: 'solid' }), width: v } })} suffix="px" />
               </Field>
             </div>
             <ToggleField
-              label="阴影"
+              label={t('pptx.style.shadow')}
               checked={Boolean(el.shadow)}
               onChange={(e) => upd((d) => {
                 if (d.type !== 'shape') return
@@ -586,8 +591,8 @@ function ElementSection({ el }: { el: PPTElement }) {
               })}
             />
           </Section>
-          <Section title="内嵌文本" defaultOpen={false}>
-            <Field label="文字">
+          <Section title={t('pptx.style.embeddedText')} defaultOpen={false}>
+            <Field label={t('pptx.style.text')}>
               <input
                 type="text"
                 value={el.text ?? ''}
@@ -596,18 +601,18 @@ function ElementSection({ el }: { el: PPTElement }) {
               />
             </Field>
             <div className="grid grid-cols-2 gap-2">
-              <Field label="字号">
+              <Field label={t('pptx.style.fontSize')}>
                 <NumberInput value={el.fontSize ?? 18} min={10} max={96} onChange={(v) => upd((d) => { if (d.type === 'shape') d.fontSize = v })} />
               </Field>
-              <Field label="文字色">
+              <Field label={t('pptx.style.textColor')}>
                 <ColorInput value={el.defaultColor} onChange={(v) => upd((d) => { if (d.type === 'shape') d.defaultColor = v })} />
               </Field>
             </div>
-            <Field label="对齐">
+            <Field label={t('pptx.style.align')}>
               <SelectInput
                 value={el.align ?? 'center'}
                 onChange={(v) => upd((d) => { if (d.type === 'shape') d.align = v as ShapeElement['align'] })}
-                options={[{ value: 'left', label: '左' }, { value: 'center', label: '中' }, { value: 'right', label: '右' }]}
+                options={[{ value: 'left', label: t('pptx.style.left') }, { value: 'center', label: t('pptx.style.center') }, { value: 'right', label: t('pptx.style.right') }]}
               />
             </Field>
           </Section>
@@ -616,12 +621,12 @@ function ElementSection({ el }: { el: PPTElement }) {
 
       {/* 线条元素 */}
       {el.type === 'line' && (
-        <Section title="线条样式" defaultOpen>
+        <Section title={t('pptx.style.lineStyle')} defaultOpen>
           <div className="grid grid-cols-2 gap-2">
-            <Field label="颜色">
+            <Field label={t('pptx.style.color')}>
               <ColorInput value={el.color} onChange={(v) => upd((d) => { if (d.type === 'line') d.color = v })} />
             </Field>
-            <Field label="线宽">
+            <Field label={t('pptx.style.lineWidth')}>
               <NumberInput value={el.lineWidth} min={1} max={20} onChange={(v) => upd((d) => { if (d.type === 'line') d.lineWidth = v })} suffix="px" />
             </Field>
           </div>
@@ -637,7 +642,7 @@ function ElementSection({ el }: { el: PPTElement }) {
 
       {/* 公式元素 */}
       {el.type === 'formula' && (
-        <Section title="公式" defaultOpen>
+        <Section title={t('pptx.el.formula')} defaultOpen>
           <Field label="LaTeX">
             <button
               className="flex w-full items-center gap-2 rounded border border-gray-200 bg-gray-50 px-3 py-2 text-left text-sm hover:border-[#d14424] hover:bg-white"
@@ -645,7 +650,7 @@ function ElementSection({ el }: { el: PPTElement }) {
             >
               <Pencil size={14} className="shrink-0 text-gray-400" />
               <span className="flex-1 truncate font-mono text-xs text-gray-600">{el.latex}</span>
-              <span className="shrink-0 text-xs text-[#d14424]">编辑</span>
+              <span className="shrink-0 text-xs text-[#d14424]">{t('pptx.formula.edit')}</span>
             </button>
           </Field>
           {formulaDialogOpen && (
@@ -655,10 +660,10 @@ function ElementSection({ el }: { el: PPTElement }) {
               onClose={() => setFormulaDialogOpen(false)}
             />
           )}
-          <Field label="字号">
+          <Field label={t('pptx.style.fontSize')}>
             <NumberInput value={el.fontSize ?? 32} min={12} max={120} onChange={(v) => upd((d) => { if (d.type === 'formula') d.fontSize = v })} />
           </Field>
-          <Field label="颜色">
+          <Field label={t('pptx.style.color')}>
             <ColorInput value={el.color} onChange={(v) => upd((d) => { if (d.type === 'formula') d.color = v })} />
           </Field>
         </Section>
@@ -666,15 +671,15 @@ function ElementSection({ el }: { el: PPTElement }) {
 
       {/* 音视频元素 */}
       {(el.type === 'video' || el.type === 'audio') && (
-        <Section title="媒体" defaultOpen>
-          <ToggleField label="循环" checked={el.loop} onChange={(e) => upd((d) => { if (d.type === 'video' || d.type === 'audio') d.loop = e })} />
-          <ToggleField label="自动播放" checked={el.autoPlay} onChange={(e) => upd((d) => { if (d.type === 'video' || d.type === 'audio') d.autoPlay = e })} />
+        <Section title={t('pptx.media.title')} defaultOpen>
+          <ToggleField label={t('pptx.media.loop')} checked={el.loop} onChange={(e) => upd((d) => { if (d.type === 'video' || d.type === 'audio') d.loop = e })} />
+          <ToggleField label={t('pptx.media.autoplay')} checked={el.autoPlay} onChange={(e) => upd((d) => { if (d.type === 'video' || d.type === 'audio') d.autoPlay = e })} />
         </Section>
       )}
 
       {/* 通用属性 */}
-      <Section title="通用属性" defaultOpen={false}>
-        <Field label="不透明度">
+      <Section title={t('pptx.general.title')} defaultOpen={false}>
+        <Field label={t('pptx.style.opacity')}>
           <div className="flex items-center gap-2">
             <input
               type="range"
@@ -687,13 +692,13 @@ function ElementSection({ el }: { el: PPTElement }) {
             <NumberInput value={Math.round((el.opacity ?? 1) * 100)} min={5} max={100} onChange={(v) => upd((d) => { d.opacity = v / 100 })} suffix="%" />
           </div>
         </Field>
-        <ToggleField label="锁定" icon={<Lock size={12} />} checked={el.lock ?? false} onChange={(v) => upd((d) => { d.lock = v })} />
-        <Field label="超链接">
+        <ToggleField label={t('pptx.general.lock')} icon={<Lock size={12} />} checked={el.lock ?? false} onChange={(v) => upd((d) => { d.lock = v })} />
+        <Field label={t('pptx.general.link')}>
           <div className="flex items-center gap-1.5">
             <Link2 size={13} className="shrink-0 text-gray-400" />
             <input
               type="text"
-              placeholder="https:// 或页面id"
+              placeholder={t('pptx.general.linkPlaceholder')}
               value={el.link?.target ?? ''}
               onChange={(e) => upd((d) => {
                 const v = e.target.value
@@ -704,7 +709,7 @@ function ElementSection({ el }: { el: PPTElement }) {
           </div>
         </Field>
         {el.type === 'shape' && (
-          <Field label="形状">
+          <Field label={t('pptx.general.shape')}>
             <SelectInput
               value={el.shapeKey}
               onChange={(v) => pushThen(() => useEditorStore.getState().updateElements([el.id], (d) => { if (d.type === 'shape') { d.shapeKey = v; d.path = undefined } }))}
@@ -720,6 +725,7 @@ function ElementSection({ el }: { el: PPTElement }) {
 /** 表格编辑：行列管理 + 单元格选择与样式 */
 function TableSection({ el }: { el: PPTElement }) {
   const [sel, setSel] = useState<{ r: number; c: number }>({ r: 0, c: 0 })
+  const { t } = useI18n()
   if (el.type !== 'table') return null
   const rows = el.cells.length
   const cols = Math.max(...el.cells.map((row) => row?.length ?? 0), 1)
@@ -760,33 +766,33 @@ function TableSection({ el }: { el: PPTElement }) {
 
   return (
     <div className="mb-2">
-      <Section title="表格结构" defaultOpen>
+      <Section title={t('pptx.table.structure')} defaultOpen>
         <div className="flex flex-wrap gap-1">
-          <ActionButton label="加行" onClick={() => upd((d) => {
+          <ActionButton label={t('pptx.table.addRow')} onClick={() => upd((d) => {
             if (d.type !== 'table') return
             d.cells.push(Array.from({ length: d.colSizes.length }, () => ({ text: '' })))
             d.rowSizes = d.rowSizes.map((v) => v * (d.rowSizes.length / (d.rowSizes.length + 1)))
             d.rowSizes.push(1 / (d.rowSizes.length + 1))
           })} />
-          <ActionButton label="加列" onClick={() => upd((d) => {
+          <ActionButton label={t('pptx.table.addCol')} onClick={() => upd((d) => {
             if (d.type !== 'table') return
             for (const row of d.cells) row.push({ text: '' })
             d.colSizes.push(1 / (d.colSizes.length + 1))
             d.colSizes = d.colSizes.map((v) => v * (d.colSizes.length / (d.colSizes.length + 1)))
           })} />
-          <ActionButton label="删行" danger onClick={() => upd((d) => {
+          <ActionButton label={t('pptx.table.delRow')} danger onClick={() => upd((d) => {
             if (d.type !== 'table' || d.cells.length <= 1) return
             d.cells.pop()
             d.rowSizes.pop()
           })} />
-          <ActionButton label="删列" danger onClick={() => upd((d) => {
+          <ActionButton label={t('pptx.table.delCol')} danger onClick={() => upd((d) => {
             if (d.type !== 'table' || d.colSizes.length <= 1) return
             for (const row of d.cells) row.pop()
             d.colSizes.pop()
           })} />
         </div>
         <div className="mt-2 flex items-center gap-2">
-          <Field label="表头色" className="!w-auto !mb-0">
+          <Field label={t('pptx.table.headerColor')} className="!w-auto !mb-0">
             <ColorInput
               value={el.theme?.headColor ?? '#d14424'}
               onChange={(v) => upd((d) => {
@@ -797,7 +803,7 @@ function TableSection({ el }: { el: PPTElement }) {
               small
             />
           </Field>
-          <ActionButton label="应用表头" onClick={() => upd((d) => {
+          <ActionButton label={t('pptx.table.applyHeader')} onClick={() => upd((d) => {
             if (d.type !== 'table') return
             const headColor = d.theme?.headColor ?? '#d14424'
             if (!d.theme) {
@@ -821,9 +827,9 @@ function TableSection({ el }: { el: PPTElement }) {
         </div>
       </Section>
 
-      <Section title="表格边框" defaultOpen>
+      <Section title={t('pptx.table.border')} defaultOpen>
         <div className="grid grid-cols-2 gap-2">
-          <Field label="边框色">
+          <Field label={t('pptx.style.borderColor')}>
             <ColorInput
               value={el.outline?.color ?? '#cccccc'}
               onChange={(v) => upd((d) => {
@@ -837,7 +843,7 @@ function TableSection({ el }: { el: PPTElement }) {
               small
             />
           </Field>
-          <Field label="边框宽">
+          <Field label={t('pptx.style.borderWidth')}>
             <NumberInput
               value={el.outline?.width ?? 1}
               min={0}
@@ -853,7 +859,7 @@ function TableSection({ el }: { el: PPTElement }) {
             />
           </Field>
         </div>
-        <Field label="边框样式">
+        <Field label={t('pptx.table.borderStyle')}>
           <SelectInput
             value={el.outline?.style ?? 'solid'}
             onChange={(v) => upd((d) => {
@@ -861,17 +867,17 @@ function TableSection({ el }: { el: PPTElement }) {
               d.outline = { ...(d.outline ?? { color: '#cccccc', width: 1 }), style: v }
             })}
             options={[
-              { value: 'solid', label: '实线' },
-              { value: 'dashed', label: '虚线' },
-              { value: 'dotted', label: '点线' },
+              { value: 'solid', label: t('pptx.style.lineStyleSolid') },
+              { value: 'dashed', label: t('pptx.style.lineStyleDashed') },
+              { value: 'dotted', label: t('pptx.style.lineStyleDotted') },
             ]}
           />
         </Field>
       </Section>
 
-      <Section title="批量字体设置" defaultOpen={false}>
+      <Section title={t('pptx.table.bulkFont')} defaultOpen={false}>
         <div className="grid grid-cols-2 gap-2">
-          <Field label="字色">
+          <Field label={t('pptx.table.fontColorShort')}>
             <ColorInput value="#333333" onChange={(v) => upd((d) => {
               if (d.type !== 'table') return
               for (const row of d.cells) for (const tc of row) {
@@ -882,7 +888,7 @@ function TableSection({ el }: { el: PPTElement }) {
               }
             })} small />
           </Field>
-          <Field label="字号">
+          <Field label={t('pptx.style.fontSize')}>
             <NumberInput value={14} min={10} max={72} onChange={(v) => upd((d) => {
               if (d.type !== 'table') return
               for (const row of d.cells) for (const tc of row) {
@@ -894,7 +900,7 @@ function TableSection({ el }: { el: PPTElement }) {
             })} />
           </Field>
         </div>
-        <Field label="字体">
+        <Field label={t('pptx.table.font')}>
           <SelectInput value="" onChange={(v) => upd((d) => {
             if (d.type !== 'table') return
             for (const row of d.cells) for (const tc of row) {
@@ -904,7 +910,7 @@ function TableSection({ el }: { el: PPTElement }) {
               }
             }
           })} options={[
-            { value: '', label: '默认' },
+            { value: '', label: t('pptx.table.default') },
             { value: '微软雅黑', label: '微软雅黑' },
             { value: '宋体', label: '宋体' },
             { value: '黑体', label: '黑体' },
@@ -915,7 +921,7 @@ function TableSection({ el }: { el: PPTElement }) {
           ]} />
         </Field>
         <div className="grid grid-cols-2 gap-2">
-          <Field label="水平">
+          <Field label={t('pptx.table.horizontal')}>
             <SelectInput value="" onChange={(v) => upd((d) => {
               if (d.type !== 'table') return
               for (const row of d.cells) for (const tc of row) {
@@ -925,12 +931,12 @@ function TableSection({ el }: { el: PPTElement }) {
                 }
               }
             })} options={[
-              { value: 'left', label: '左对齐' },
-              { value: 'center', label: '居中' },
-              { value: 'right', label: '右对齐' },
+              { value: 'left', label: t('pptx.table.alignLeft') },
+              { value: 'center', label: t('pptx.table.alignCenter') },
+              { value: 'right', label: t('pptx.table.alignRight') },
             ]} />
           </Field>
-          <Field label="垂直">
+          <Field label={t('pptx.table.vertical')}>
             <SelectInput value="" onChange={(v) => upd((d) => {
               if (d.type !== 'table') return
               for (const row of d.cells) for (const tc of row) {
@@ -940,14 +946,14 @@ function TableSection({ el }: { el: PPTElement }) {
                 }
               }
             })} options={[
-              { value: 'top', label: '上对齐' },
-              { value: 'middle', label: '居中' },
-              { value: 'bottom', label: '下对齐' },
+              { value: 'top', label: t('pptx.table.alignTop') },
+              { value: 'middle', label: t('pptx.table.alignCenter') },
+              { value: 'bottom', label: t('pptx.table.alignBottom') },
             ]} />
           </Field>
         </div>
         <div className="mt-1 flex flex-wrap gap-1">
-          <ActionButton label="全部加粗" onClick={() => upd((d) => {
+          <ActionButton label={t('pptx.table.boldAll')} onClick={() => upd((d) => {
             if (d.type !== 'table') return
             for (const row of d.cells) for (const tc of row) {
               if (tc) {
@@ -956,13 +962,13 @@ function TableSection({ el }: { el: PPTElement }) {
               }
             }
           })} />
-          <ActionButton label="取消加粗" onClick={() => upd((d) => {
+          <ActionButton label={t('pptx.table.unboldAll')} onClick={() => upd((d) => {
             if (d.type !== 'table') return
             for (const row of d.cells) for (const tc of row) {
               if (tc?.style) tc.style.bold = false
             }
           })} />
-          <ActionButton label="全部斜体" onClick={() => upd((d) => {
+          <ActionButton label={t('pptx.table.italicAll')} onClick={() => upd((d) => {
             if (d.type !== 'table') return
             for (const row of d.cells) for (const tc of row) {
               if (tc) {
@@ -971,13 +977,13 @@ function TableSection({ el }: { el: PPTElement }) {
               }
             }
           })} />
-          <ActionButton label="取消斜体" onClick={() => upd((d) => {
+          <ActionButton label={t('pptx.table.unitalicAll')} onClick={() => upd((d) => {
             if (d.type !== 'table') return
             for (const row of d.cells) for (const tc of row) {
               if (tc?.style) tc.style.italic = false
             }
           })} />
-          <ActionButton label="全部下划线" onClick={() => upd((d) => {
+          <ActionButton label={t('pptx.table.underlineAll')} onClick={() => upd((d) => {
             if (d.type !== 'table') return
             for (const row of d.cells) for (const tc of row) {
               if (tc) {
@@ -986,7 +992,7 @@ function TableSection({ el }: { el: PPTElement }) {
               }
             }
           })} />
-          <ActionButton label="取消下划线" onClick={() => upd((d) => {
+          <ActionButton label={t('pptx.table.ununderlineAll')} onClick={() => upd((d) => {
             if (d.type !== 'table') return
             for (const row of d.cells) for (const tc of row) {
               if (tc?.style) tc.style.underline = false
@@ -995,7 +1001,7 @@ function TableSection({ el }: { el: PPTElement }) {
         </div>
       </Section>
 
-      <Section title="单元格编辑" defaultOpen>
+      <Section title={t('pptx.table.cellEdit')} defaultOpen>
         <div className="mb-2 grid gap-0.5" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
           {Array.from({ length: rows }, (_, rr) => (
             Array.from({ length: cols }, (_, cc) => (
@@ -1012,44 +1018,44 @@ function TableSection({ el }: { el: PPTElement }) {
 
         {cell && (
           <>
-            <div className="mb-1 text-xs text-gray-400">单元格 {r + 1},{c + 1}</div>
+            <div className="mb-1 text-xs text-gray-400">{t('pptx.table.cell', { row: r + 1, col: c + 1 })}</div>
             <textarea
               className="mb-2 h-14 w-full rounded border border-gray-200 p-1.5 text-xs focus:border-[#d14424] focus:outline-none"
               value={cell.text}
               onChange={(e) => setCell({ text: e.target.value })}
             />
             <div className="grid grid-cols-2 gap-2">
-              <ToggleField label="加粗" checked={cell.style?.bold ?? false} onChange={(v) => setCellStyle({ bold: v })} />
-              <ToggleField label="斜体" checked={cell.style?.italic ?? false} onChange={(v) => setCellStyle({ italic: v })} />
-              <ToggleField label="下划线" checked={cell.style?.underline ?? false} onChange={(v) => setCellStyle({ underline: v })} />
-              <Field label="字色">
+              <ToggleField label={t('pptx.table.bold')} checked={cell.style?.bold ?? false} onChange={(v) => setCellStyle({ bold: v })} />
+              <ToggleField label={t('pptx.table.italic')} checked={cell.style?.italic ?? false} onChange={(v) => setCellStyle({ italic: v })} />
+              <ToggleField label={t('pptx.table.underline')} checked={cell.style?.underline ?? false} onChange={(v) => setCellStyle({ underline: v })} />
+              <Field label={t('pptx.table.fontColorShort')}>
                 <ColorInput value={cell.style?.color} onChange={(v) => setCellStyle({ color: v })} small />
               </Field>
-              <Field label="底色">
+              <Field label={t('pptx.table.fillColor')}>
                 <ColorInput allowEmpty value={cell.style?.backcolor} onChange={(v) => setCellStyle({ backcolor: v })} small />
               </Field>
-              <Field label="字号">
+              <Field label={t('pptx.style.fontSize')}>
                 <NumberInput value={cell.style?.fontsize} min={10} max={72} onChange={(v) => setCellStyle({ fontsize: v })} />
               </Field>
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <Field label="水平">
+              <Field label={t('pptx.table.horizontal')}>
                 <SelectInput
                   value={cell.style?.align ?? 'left'}
                   onChange={(v) => setCellStyle({ align: v as NonNullable<TableCell['style']>['align'] })}
-                  options={[{ value: 'left', label: '左' }, { value: 'center', label: '中' }, { value: 'right', label: '右' }]}
+                  options={[{ value: 'left', label: t('pptx.table.alignLeft') }, { value: 'center', label: t('pptx.table.alignCenter') }, { value: 'right', label: t('pptx.table.alignRight') }]}
                 />
               </Field>
-              <Field label="垂直">
+              <Field label={t('pptx.table.vertical')}>
                 <SelectInput
                   value={cell.style?.valign ?? 'middle'}
                   onChange={(v) => setCellStyle({ valign: v as NonNullable<TableCell['style']>['valign'] })}
-                  options={[{ value: 'top', label: '上' }, { value: 'middle', label: '中' }, { value: 'bottom', label: '下' }]}
+                  options={[{ value: 'top', label: t('pptx.table.alignTop') }, { value: 'middle', label: t('pptx.table.alignCenter') }, { value: 'bottom', label: t('pptx.table.alignBottom') }]}
                 />
               </Field>
             </div>
             <div className="mt-1 flex gap-1">
-              <ActionButton label="向右合并" onClick={() => upd((d) => {
+              <ActionButton label={t('pptx.table.mergeRight')} onClick={() => upd((d) => {
                 if (d.type !== 'table') return
                 const target = d.cells[r]?.[c]
                 const right = d.cells[r]?.[c + 1]
@@ -1058,7 +1064,7 @@ function TableSection({ el }: { el: PPTElement }) {
                 target.colspan = (target.colspan ?? 1) + 1
                 d.cells[r].splice(c + 1, 1)
               })} />
-              <ActionButton label="拆分" disabled={!cell.colspan || cell.colspan <= 1} onClick={() => upd((d) => {
+              <ActionButton label={t('pptx.table.split')} disabled={!cell.colspan || cell.colspan <= 1} onClick={() => upd((d) => {
                 if (d.type !== 'table') return
                 const target = d.cells[r]?.[c]
                 if (!target || !target.colspan || target.colspan <= 1) return
@@ -1075,6 +1081,7 @@ function TableSection({ el }: { el: PPTElement }) {
 
 /** 图片裁剪区域编辑（比例为源图的 0-100%） */
 function ImageCropSection({ el }: { el: PPTElement }) {
+  const { t } = useI18n()
   if (el.type !== 'image') return null
   const clip = el.clip ?? { x: 0, y: 0, w: 1, h: 1 }
   const setClip = (patch: Partial<{ x: number; y: number; w: number; h: number }>) => {
@@ -1094,17 +1101,17 @@ function ImageCropSection({ el }: { el: PPTElement }) {
   return (
     <div className="mt-2 rounded border border-gray-100 bg-white p-2">
       <div className="mb-1.5 flex items-center justify-between">
-        <span className="text-xs font-medium text-gray-600">裁剪区域（%）</span>
-        <IconButton icon={<RotateCcw size={13} />} title="重置裁剪" onClick={() => {
+        <span className="text-xs font-medium text-gray-600">{t('pptx.image.cropArea')}</span>
+        <IconButton icon={<RotateCcw size={13} />} title={t('pptx.image.resetCrop')} onClick={() => {
           const store = useEditorStore.getState()
           store.pushHistory()
           store.updateElements([el.id], (d) => { if (d.type === 'image') d.clip = undefined })
         }} />
       </div>
       <div className="grid grid-cols-2 gap-1.5">
-        {([['x', '左'], ['y', '上'], ['w', '宽'], ['h', '高']] as const).map(([key, label]) => (
+        {([['x', 'pptx.image.cropLeft'], ['y', 'pptx.image.cropTop'], ['w', 'pptx.image.cropWidth'], ['h', 'pptx.image.cropHeight']] as const).map(([key, label]) => (
           <label key={key} className="flex items-center gap-1 text-xs text-gray-500">
-            {label}
+            {t(label)}
             <input
               type="number"
               min={key === 'w' || key === 'h' ? 5 : 0}
@@ -1121,18 +1128,19 @@ function ImageCropSection({ el }: { el: PPTElement }) {
 }
 
 /** 图表元素开关项（与 eflink-excel 的设置面板一致） */
-const CHART_ELEMENT_ITEMS: { key: keyof ChartElements; label: string }[] = [
-  { key: 'legend', label: '图例' },
-  { key: 'gridLine', label: '网格线' },
-  { key: 'axis', label: '坐标轴' },
-  { key: 'trendline', label: '趋势线' },
-  { key: 'chartTitle', label: '图表标题' },
-  { key: 'dataLabel', label: '数据标签' },
-  { key: 'axisTitle', label: '轴标题' },
+const CHART_ELEMENT_ITEMS: { key: keyof ChartElements; labelKey: string }[] = [
+  { key: 'legend', labelKey: 'pptx.chart.legend' },
+  { key: 'gridLine', labelKey: 'pptx.chart.gridlines' },
+  { key: 'axis', labelKey: 'pptx.chart.axis' },
+  { key: 'trendline', labelKey: 'pptx.chart.trendline' },
+  { key: 'chartTitle', labelKey: 'pptx.chart.titleElement' },
+  { key: 'dataLabel', labelKey: 'pptx.chart.dataLabels' },
+  { key: 'axisTitle', labelKey: 'pptx.chart.axisTitle' },
 ]
 
 /** 图表样式设置区（对齐 eflink-excel：类型/元素开关/标题/切换行列 + 配色方案 + 数据编辑） */
 function ChartStyleSection({ el, upd }: { el: PPTElement; upd: (fn: (draft: PPTElement) => void) => void }) {
+  const { t } = useI18n()
   if (el.type !== 'chart') return null
   const elements: ChartElements = el.elements ?? DEFAULT_CHART_ELEMENTS
 
@@ -1144,7 +1152,7 @@ function ChartStyleSection({ el, upd }: { el: PPTElement; upd: (fn: (draft: PPTE
     if (d.type !== 'chart') return
     const { labels, series } = d.data
     d.data.labels = series.map((s) => s.name)
-    d.data.series = labels.map((l, i) => ({ name: l || `系列${i + 1}`, values: series.map((s) => s.values[i] ?? 0) }))
+    d.data.series = labels.map((l, i) => ({ name: l || t('pptx.chart.seriesName', { n: i + 1 }), values: series.map((s) => s.values[i] ?? 0) }))
   })
 
   const applyPalette = (palette: string[]) => upd((d) => {
@@ -1154,25 +1162,25 @@ function ChartStyleSection({ el, upd }: { el: PPTElement; upd: (fn: (draft: PPTE
 
   return (
     <>
-      <Section title="图表设置" defaultOpen>
-        <Field label="类型">
+      <Section title={t('pptx.chart.settings')} defaultOpen>
+        <Field label={t('pptx.style.type')}>
           <GroupedSelectInput
             testId="chart-type"
             value={el.chartType}
             onChange={(v) => upd((d) => { if (d.type === 'chart') d.chartType = v as ChartElement['chartType'] })}
-            groups={chartTypeGroups}
+            groups={chartTypeGroups(t)}
           />
         </Field>
         <div>
-          <div className="mb-1 text-xs text-gray-500">图表元素</div>
+          <div className="mb-1 text-xs text-gray-500">{t('pptx.chart.elements')}</div>
           <div className="grid grid-cols-2 gap-x-2">
-            {CHART_ELEMENT_ITEMS.map(({ key, label }) => (
-              <ToggleField key={key} label={label} checked={elements[key]} onChange={(e) => updElement(key, e)} />
+            {CHART_ELEMENT_ITEMS.map(({ key, labelKey }) => (
+              <ToggleField key={key} label={t(labelKey)} checked={elements[key]} onChange={(e) => updElement(key, e)} />
             ))}
           </div>
         </div>
         {elements.chartTitle && (
-          <Field label="标题">
+          <Field label={t('pptx.chart.title')}>
             <input
               type="text"
               value={el.title ?? ''}
@@ -1181,18 +1189,18 @@ function ChartStyleSection({ el, upd }: { el: PPTElement; upd: (fn: (draft: PPTE
             />
           </Field>
         )}
-        <Field label="行列">
-          <ActionButton label="切换行列" onClick={transpose} />
+        <Field label={t('pptx.chart.seriesOrientation')}>
+          <ActionButton label={t('pptx.chart.transpose')} onClick={transpose} />
         </Field>
-        <Field label="系列">
+        <Field label={t('pptx.chart.series')}>
           <div className="flex gap-1">
-            <ActionButton label="添加" onClick={() => upd((d) => {
+            <ActionButton label={t('pptx.chart.add')} onClick={() => upd((d) => {
               if (d.type !== 'chart') return
               const n = d.data.series.length + 1
-              d.data.series.push({ name: `系列${n}`, values: d.data.labels.map(() => 0) })
+              d.data.series.push({ name: t('pptx.chart.seriesName', { n }), values: d.data.labels.map(() => 0) })
               if (d.chartColors) d.chartColors = [...d.chartColors, DEFAULT_CHART_COLORS[(n - 1) % DEFAULT_CHART_COLORS.length]]
             })} />
-            <ActionButton label="减少" danger disabled={el.data.series.length <= 1} onClick={() => upd((d) => {
+            <ActionButton label={t('pptx.chart.remove')} danger disabled={el.data.series.length <= 1} onClick={() => upd((d) => {
               if (d.type !== 'chart' || d.data.series.length <= 1) return
               d.data.series.pop()
               if (d.chartColors) d.chartColors = d.chartColors.slice(0, d.data.series.length)
@@ -1201,7 +1209,7 @@ function ChartStyleSection({ el, upd }: { el: PPTElement; upd: (fn: (draft: PPTE
         </Field>
         <DataEditor el={el} />
       </Section>
-      <Section title="配色方案" defaultOpen>
+      <Section title={t('pptx.chart.palettes')} defaultOpen>
         <div className="flex flex-col gap-2">
           {CHART_PALETTES.map((palette, index) => {
             const active = el.paletteIndex === index
@@ -1209,7 +1217,7 @@ function ChartStyleSection({ el, upd }: { el: PPTElement; upd: (fn: (draft: PPTE
               <button
                 key={index}
                 type="button"
-                title={`配色方案 ${index + 1}`}
+                title={t('pptx.chart.paletteN', { n: index + 1 })}
                 onClick={() => applyPalette(palette)}
                 className={`flex items-center gap-1 rounded-md border px-2 py-1.5 transition-colors ${
                   active ? 'border-[#d14424] ring-1 ring-[#d14424]' : 'border-gray-200 hover:border-[#d14424]/40'
@@ -1222,7 +1230,7 @@ function ChartStyleSection({ el, upd }: { el: PPTElement; upd: (fn: (draft: PPTE
             )
           })}
         </div>
-        <Field label="微调">
+        <Field label={t('pptx.chart.tweak')}>
           <div className="flex flex-wrap gap-1">
             {el.data.series.map((_s, i) => (
               <ColorInput
@@ -1246,6 +1254,7 @@ function ChartStyleSection({ el, upd }: { el: PPTElement; upd: (fn: (draft: PPTE
 
 /** 图表数据表格编辑器 */
 function DataEditor({ el }: { el: PPTElement }) {
+  const { t } = useI18n()
   if (el.type !== 'chart') return null
   const { labels, series } = el.data
 
@@ -1268,7 +1277,7 @@ function DataEditor({ el }: { el: PPTElement }) {
     upd((d) => {
       if (d.type !== 'chart') return
       const idx = d.data.labels.length + 1
-      d.data.labels.push(`类别${idx}`)
+      d.data.labels.push(t('pptx.chart.categoryName', { n: idx }))
       d.data.series.forEach((s) => s.values.push(0))
     })
 
@@ -1283,7 +1292,7 @@ function DataEditor({ el }: { el: PPTElement }) {
     upd((d) => {
       if (d.type !== 'chart') return
       const n = d.data.series.length + 1
-      d.data.series.push({ name: `系列${n}`, values: d.data.labels.map(() => 0) })
+      d.data.series.push({ name: t('pptx.chart.seriesName', { n }), values: d.data.labels.map(() => 0) })
       if (d.chartColors) d.chartColors = [...d.chartColors, DEFAULT_CHART_COLORS[(n - 1) % DEFAULT_CHART_COLORS.length]]
     })
 
@@ -1297,17 +1306,17 @@ function DataEditor({ el }: { el: PPTElement }) {
   return (
     <div className="mt-2">
       <div className="mb-1 flex items-center justify-between">
-        <span className="text-xs text-gray-500">数据编辑</span>
+        <span className="text-xs text-gray-500">{t('pptx.chart.dataEdit')}</span>
         <div className="flex gap-1">
-          <ActionButton label="+ 行" onClick={addRow} />
-          <ActionButton label="+ 列" onClick={addSeries} />
+          <ActionButton label={t('pptx.chart.addRow')} onClick={addRow} />
+          <ActionButton label={t('pptx.chart.addCol')} onClick={addSeries} />
         </div>
       </div>
       <div className="overflow-x-auto rounded border border-gray-200">
         <table className="w-full border-collapse text-xs">
           <thead>
             <tr className="bg-gray-50">
-              <th className="border-b border-gray-200 px-1.5 py-1 text-left text-[10px] font-medium text-gray-400">标签</th>
+              <th className="border-b border-gray-200 px-1.5 py-1 text-left text-[10px] font-medium text-gray-400">{t('pptx.chart.label')}</th>
               {series.map((s, si) => (
                 <th key={si} className="border-b border-l border-gray-200 px-1 py-1 text-center text-[10px] font-medium text-gray-400">
                   <input
@@ -1347,7 +1356,7 @@ function DataEditor({ el }: { el: PPTElement }) {
                     <button
                       type="button"
                       className="text-gray-300 hover:text-red-400"
-                      title="删除此行"
+                      title={t('pptx.chart.deleteRow')}
                       onClick={() => removeRow(li)}
                       disabled={labels.length <= 1}
                     >
@@ -1367,7 +1376,7 @@ function DataEditor({ el }: { el: PPTElement }) {
               key={si}
               type="button"
               className="text-gray-300 hover:text-red-400"
-              title={`删除系列 ${_s.name || si + 1}`}
+              title={t('pptx.chart.deleteSeries', { name: _s.name || si + 1 })}
               onClick={() => removeSeries(si)}
             >
               <Trash2 size={11} />
@@ -1376,7 +1385,7 @@ function DataEditor({ el }: { el: PPTElement }) {
         </div>
         {series.length > 1 && (
           <span className="text-[10px] text-gray-400">
-            共 {labels.length} 行 × {series.length} 列
+            {t('pptx.chart.summary', { rows: labels.length, cols: series.length })}
           </span>
         )}
       </div>
@@ -1386,6 +1395,7 @@ function DataEditor({ el }: { el: PPTElement }) {
 
 /* 排列/对齐/组合/删除 */
 function ArrangeSection({ selectedIds }: { selectedIds: string[] }) {
+  const { t } = useI18n()
   if (!selectedIds.length) return null
   const store = useEditorStore.getState()
   const slideW = store.presentation.width
@@ -1448,38 +1458,38 @@ function ArrangeSection({ selectedIds }: { selectedIds: string[] }) {
   }
 
   return (
-    <Section title="排列与对齐">
-      <ToolGroup label="对齐">
-        <IconButton icon={<AlignLeft size={14} />} title="左对齐" onClick={() => align('left')} />
-        <IconButton icon={<AlignCenter size={14} />} title="水平居中" onClick={() => align('hcenter')} />
-        <IconButton icon={<AlignRight size={14} />} title="右对齐" onClick={() => align('right')} />
+    <Section title={t('pptx.arrange.title')}>
+      <ToolGroup label={t('pptx.arrange.align')}>
+        <IconButton icon={<AlignLeft size={14} />} title={t('pptx.arrange.alignLeft')} onClick={() => align('left')} />
+        <IconButton icon={<AlignCenter size={14} />} title={t('pptx.arrange.alignCenterH')} onClick={() => align('hcenter')} />
+        <IconButton icon={<AlignRight size={14} />} title={t('pptx.arrange.alignRight')} onClick={() => align('right')} />
         <ToolDivider />
-        <IconButton icon={<AlignVerticalJustifyStart size={14} />} title="顶对齐" onClick={() => align('top')} />
-        <IconButton icon={<AlignVerticalJustifyCenter size={14} />} title="垂直居中" onClick={() => align('vcenter')} />
-        <IconButton icon={<AlignVerticalJustifyEnd size={14} />} title="底对齐" onClick={() => align('bottom')} />
+        <IconButton icon={<AlignVerticalJustifyStart size={14} />} title={t('pptx.arrange.alignTop')} onClick={() => align('top')} />
+        <IconButton icon={<AlignVerticalJustifyCenter size={14} />} title={t('pptx.arrange.alignCenterV')} onClick={() => align('vcenter')} />
+        <IconButton icon={<AlignVerticalJustifyEnd size={14} />} title={t('pptx.arrange.alignBottom')} onClick={() => align('bottom')} />
       </ToolGroup>
 
-      <ToolGroup label="分布">
-        <IconButton icon={<AlignHorizontalDistributeCenter size={14} />} title="横向分布" onClick={() => distribute('horizontal')} />
-        <IconButton icon={<AlignVerticalDistributeCenter size={14} />} title="纵向分布" onClick={() => distribute('vertical')} />
+      <ToolGroup label={t('pptx.arrange.distribute')}>
+        <IconButton icon={<AlignHorizontalDistributeCenter size={14} />} title={t('pptx.arrange.distributeH')} onClick={() => distribute('horizontal')} />
+        <IconButton icon={<AlignVerticalDistributeCenter size={14} />} title={t('pptx.arrange.distributeV')} onClick={() => distribute('vertical')} />
       </ToolGroup>
 
-      <ToolGroup label="图层">
-        <IconButton icon={<IconLayerForward size={14} />} title="上移一层" onClick={() => { store.pushHistory(); store.setElementLevel(selectedIds, 'up') }} />
-        <IconButton icon={<IconLayerBackward size={14} />} title="下移一层" onClick={() => { store.pushHistory(); store.setElementLevel(selectedIds, 'down') }} />
-        <IconButton icon={<IconLayerToFront size={14} />} title="置顶" onClick={() => { store.pushHistory(); store.setElementLevel(selectedIds, 'top') }} />
-        <IconButton icon={<IconLayerToBack size={14} />} title="置底" onClick={() => { store.pushHistory(); store.setElementLevel(selectedIds, 'bottom') }} />
+      <ToolGroup label={t('pptx.arrange.layers')}>
+        <IconButton icon={<IconLayerForward size={14} />} title={t('pptx.arrange.moveUp')} onClick={() => { store.pushHistory(); store.setElementLevel(selectedIds, 'up') }} />
+        <IconButton icon={<IconLayerBackward size={14} />} title={t('pptx.arrange.moveDown')} onClick={() => { store.pushHistory(); store.setElementLevel(selectedIds, 'down') }} />
+        <IconButton icon={<IconLayerToFront size={14} />} title={t('pptx.arrange.toFront')} onClick={() => { store.pushHistory(); store.setElementLevel(selectedIds, 'top') }} />
+        <IconButton icon={<IconLayerToBack size={14} />} title={t('pptx.arrange.toBack')} onClick={() => { store.pushHistory(); store.setElementLevel(selectedIds, 'bottom') }} />
       </ToolGroup>
 
-      <ToolGroup label="操作">
+      <ToolGroup label={t('pptx.arrange.actions')}>
         {selectedIds.length > 1 && (
-          <IconButton icon={<Group size={14} />} title="组合" onClick={() => { store.pushHistory(); store.setGroup(selectedIds, `g-${Date.now().toString(36)}`) }} />
+          <IconButton icon={<Group size={14} />} title={t('pptx.arrange.group')} onClick={() => { store.pushHistory(); store.setGroup(selectedIds, `g-${Date.now().toString(36)}`) }} />
         )}
         {selectedIds.length === 1 && useEditorStore.getState().presentation.slides[useEditorStore.getState().slideIndex].elements.find((el) => el.id === selectedIds[0])?.groupId && (
-          <IconButton icon={<Ungroup size={14} />} title="取消组合" onClick={() => { store.pushHistory(); store.setGroup(selectedIds, undefined) }} />
+          <IconButton icon={<Ungroup size={14} />} title={t('pptx.arrange.ungroup')} onClick={() => { store.pushHistory(); store.setGroup(selectedIds, undefined) }} />
         )}
-        <IconButton icon={<Copy size={14} />} title="复制" onClick={() => store.duplicateElements(selectedIds)} />
-        <IconButton icon={<Trash2 size={14} />} title="删除" danger onClick={() => { store.pushHistory(); store.removeElements(selectedIds) }} />
+        <IconButton icon={<Copy size={14} />} title={t('pptx.arrange.duplicate')} onClick={() => store.duplicateElements(selectedIds)} />
+        <IconButton icon={<Trash2 size={14} />} title={t('pptx.arrange.delete')} danger onClick={() => { store.pushHistory(); store.removeElements(selectedIds) }} />
       </ToolGroup>
     </Section>
   )
@@ -1491,9 +1501,11 @@ function AnimationTab() {
   const selectedIds = useEditorStore((s) => s.selectedIds)
   const slide = useEditorStore((s) => s.presentation.slides[s.slideIndex])
   const store = useEditorStore.getState()
+  const { t } = useI18n()
+  const effects = animEffectOptions(t)
 
   if (!slide || selectedIds.length !== 1) {
-    return <div className="text-xs text-gray-400">选中单个元素后可设置动画</div>
+    return <div className="text-xs text-gray-400">{t('pptx.anim.selectOne')}</div>
   }
   const el = slide.elements.find((e) => e.id === selectedIds[0])
   if (!el) return null
@@ -1502,10 +1514,10 @@ function AnimationTab() {
   return (
     <div>
       <div className="mb-2 rounded-lg bg-[#fbeae5] px-3 py-1.5 text-xs font-medium text-[#d14424]">
-        动画 · {typeLabel(el)}
+        {t('pptx.anim.title')} · {typeLabel(el, t)}
       </div>
-      <Section title="动画设置" defaultOpen>
-        <Field label="类别">
+      <Section title={t('pptx.anim.settings')} defaultOpen>
+        <Field label={t('pptx.anim.category')}>
           <SelectInput
             testId="anim-type"
             value={anim?.type ?? ''}
@@ -1513,16 +1525,16 @@ function AnimationTab() {
               store.pushHistory()
               store.updateElements([el.id], (d) => {
                 d.anim = v
-                  ? { type: v as never, effect: effectOptions[v as 'in' | 'emphasis' | 'out'][0]?.value ?? 'fade', duration: 600, delay: 0, trigger: 'click' }
+                  ? { type: v as never, effect: effects[v as 'in' | 'emphasis' | 'out'][0]?.value ?? 'fade', duration: 600, delay: 0, trigger: 'click' }
                   : undefined
               })
             }}
-            options={[{ value: '', label: '无' }, { value: 'in', label: '进入' }, { value: 'emphasis', label: '强调' }, { value: 'out', label: '退出' }]}
+            options={[{ value: '', label: t('pptx.style.none') }, { value: 'in', label: t('pptx.anim.entrance') }, { value: 'emphasis', label: t('pptx.anim.emphasis') }, { value: 'out', label: t('pptx.anim.exit') }]}
           />
         </Field>
         {anim && (
           <>
-            <Field label="效果">
+            <Field label={t('pptx.style.effect')}>
               <SelectInput
                 testId="anim-effect"
                 value={anim.effect}
@@ -1530,29 +1542,29 @@ function AnimationTab() {
                   store.pushHistory()
                   store.updateElements([el.id], (d) => { if (d.anim) d.anim.effect = v })
                 }}
-                options={effectOptions[anim.type] ?? []}
+                options={effects[anim.type] ?? []}
               />
             </Field>
             <div className="grid grid-cols-2 gap-2">
-              <Field label="时长">
+              <Field label={t('pptx.style.duration')}>
                 <NumberInput value={anim.duration} step={100} onChange={(v) => {
                   store.updateElements([el.id], (d) => { if (d.anim) d.anim.duration = v })
                 }} suffix="ms" />
               </Field>
-              <Field label="延迟">
+              <Field label={t('pptx.anim.delay')}>
                 <NumberInput value={anim.delay} step={100} onChange={(v) => {
                   store.updateElements([el.id], (d) => { if (d.anim) d.anim.delay = v })
                 }} suffix="ms" />
               </Field>
             </div>
-            <Field label="触发">
+            <Field label={t('pptx.anim.trigger')}>
               <SelectInput
                 value={anim.trigger}
                 onChange={(v) => {
                   store.pushHistory()
                   store.updateElements([el.id], (d) => { if (d.anim) d.anim.trigger = v as never })
                 }}
-                options={[{ value: 'click', label: '单击时' }, { value: 'withPrevious', label: '与上一动画同时' }, { value: 'afterPrevious', label: '上一动画之后' }]}
+                options={[{ value: 'click', label: t('pptx.anim.onClick') }, { value: 'withPrevious', label: t('pptx.anim.withPrevious') }, { value: 'afterPrevious', label: t('pptx.anim.afterPrevious') }]}
               />
             </Field>
           </>
@@ -1568,6 +1580,7 @@ function CommentTab() {
   const selectedIds = useEditorStore((s) => s.selectedIds)
   const slide = useEditorStore((s) => s.presentation.slides[s.slideIndex])
   const store = useEditorStore.getState()
+  const { t } = useI18n()
 
   if (!slide) return null
   const el = selectedIds.length === 1 ? slide.elements.find((e) => e.id === selectedIds[0]) : undefined
@@ -1575,10 +1588,10 @@ function CommentTab() {
   return (
     <div>
       {el ? (
-        <Section title="元素批注" defaultOpen>
+        <Section title={t('pptx.comment.element')} defaultOpen>
           <textarea
             className="h-20 w-full rounded border border-gray-200 p-2 text-xs focus:border-[#d14424] focus:outline-none"
-            placeholder="输入批注内容…"
+            placeholder={t('pptx.comment.placeholder')}
             defaultValue={el.comment ?? ''}
             onBlur={(e) => {
               store.pushHistory()
@@ -1587,12 +1600,12 @@ function CommentTab() {
           />
         </Section>
       ) : (
-        <div className="mb-2 text-xs text-gray-400">选中单个元素后可添加元素批注</div>
+        <div className="mb-2 text-xs text-gray-400">{t('pptx.comment.selectOne')}</div>
       )}
-      <Section title="演讲者备注（本页）" defaultOpen={false}>
+      <Section title={t('pptx.comment.notes')} defaultOpen={false}>
         <textarea
           className="h-20 w-full rounded border border-gray-200 p-2 text-xs focus:border-[#d14424] focus:outline-none"
-          placeholder="本页备注…"
+          placeholder={t('pptx.comment.notesPlaceholder')}
           defaultValue={slide.note ?? ''}
           onBlur={(e) => {
             store.pushHistory()

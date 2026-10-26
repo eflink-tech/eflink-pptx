@@ -1,5 +1,6 @@
 // 导入对话框：PPTX（先预览再导入）/ JSON
 import { useEffect, useRef, useState } from 'react'
+import { useI18n } from '@eflink-tech/office-kit'
 import { Modal } from './ModalHost'
 import { useEditorStore } from '../../store/editorStore'
 import { useUIStore, useToastStore } from '../../store/uiStore'
@@ -8,23 +9,23 @@ import { importPPTXDetailed } from '../../core/import'
 import { previewPPTXDetailed } from '../../core/preview'
 import type { ImportReport } from '../../types/slides'
 
-/** 兼容性报告 skip 种类 → 用户可读文案 */
-const SKIP_LABELS: Record<string, string> = {
-  missingImage: '缺失图片',
-  missingChart: '缺失图表数据',
-  unknownChart: '未识别图表',
-  elementParseFailed: '无法解析的元素',
-  slideParseFailed: '无法解析的页面',
-  smartartFallback: 'SmartArt 已转图片',
-  groupParseFailed: '组合解析失败',
-  groupRotation: '组合旋转未还原',
-  missingPlaceholder: '占位符缺失',
-  graphicFrameUnknown: '未识别的元素容器',
+/** 兼容性报告 skip 种类 → 文案 key */
+const SKIP_LABEL_KEYS: Record<string, string> = {
+  missingImage: 'pptx.import.skip.missingImage',
+  missingChart: 'pptx.import.skip.missingChart',
+  unknownChart: 'pptx.import.skip.unknownChart',
+  elementParseFailed: 'pptx.import.skip.elementParseFailed',
+  slideParseFailed: 'pptx.import.skip.slideParseFailed',
+  smartartFallback: 'pptx.import.skip.smartartFallback',
+  groupParseFailed: 'pptx.import.skip.groupParseFailed',
+  groupRotation: 'pptx.import.skip.groupRotation',
+  missingPlaceholder: 'pptx.import.skip.missingPlaceholder',
+  graphicFrameUnknown: 'pptx.import.skip.graphicFrameUnknown',
 }
 
 /** 兼容性报告 skip 项 → 「文案 ×N」列表（applyImport 与预览视图共用） */
-function formatSkipped(report: ImportReport): string[] {
-  return Object.entries(report.skipped).map(([k, v]) => `${SKIP_LABELS[k] ?? k} ×${v}`)
+function formatSkipped(report: ImportReport, t: (key: string) => string): string[] {
+  return Object.entries(report.skipped).map(([k, v]) => `${SKIP_LABEL_KEYS[k] ? t(SKIP_LABEL_KEYS[k]) : k} ×${v}`)
 }
 
 /** 预览状态：文件 + SVG 页面 + 兼容性报告 */
@@ -35,6 +36,7 @@ interface PreviewState {
 }
 
 export function ImportDialog() {
+  const { t } = useI18n()
   const toast = useToastStore.getState().toast
   const closeModal = useUIStore.getState().closeModal
   const [preview, setPreview] = useState<PreviewState | null>(null)
@@ -64,22 +66,22 @@ export function ImportDialog() {
 
   /** 确认导入：解析并替换当前演示文稿（复用现有导入逻辑） */
   const applyImport = async (file: File) => {
-    toast('正在导入 PPTX…')
+    toast(t('pptx.import.importing'))
     const { presentation: pres, report } = await importPPTXDetailed(file)
     useEditorStore.getState().pushHistory()
     useEditorStore.getState().replacePresentation(pres)
-    const items = formatSkipped(report)
+    const items = formatSkipped(report, t)
     if (items.length) {
-      toast(`已导入 PPTX（${pres.slides.length} 页）；部分内容未完整还原：${items.join('、')}`, 'success')
+      toast(t('pptx.import.pptxPartial', { count: pres.slides.length, items: items.join(t('pptx.listSeparator')) }), 'success')
     } else {
-      toast(`已导入 PPTX（${pres.slides.length} 页）`, 'success')
+      toast(t('pptx.import.pptxDone', { count: pres.slides.length }), 'success')
     }
     useEditorStore.setState({ slideIndex: 0, selectedIds: [] })
     closeModal()
   }
 
   const handleError = (error: unknown) => {
-    toast(`导入失败：${error instanceof Error ? error.message : '未知错误'}`, 'error')
+    toast(t('pptx.import.failed', { message: error instanceof Error ? error.message : t('pptx.export.unknownError') }), 'error')
   }
 
   const handleFile = async (file: File) => {
@@ -89,12 +91,12 @@ export function ImportDialog() {
         const pres = parseJSONFile(text)
         useEditorStore.getState().pushHistory()
         useEditorStore.getState().replacePresentation(pres)
-        toast(`已导入 JSON（${pres.slides.length} 页）`, 'success')
+        toast(t('pptx.import.jsonDone', { count: pres.slides.length }), 'success')
         useEditorStore.setState({ slideIndex: 0, selectedIds: [] })
         closeModal()
       } else if (file.name.toLowerCase().endsWith('.pptx')) {
         // 先生成高保真预览，用户确认后再真正导入
-        toast('正在生成预览…')
+        toast(t('pptx.import.previewing'))
         setBusy(true)
         try {
           const { pages, report } = await previewPPTXDetailed(file)
@@ -103,7 +105,7 @@ export function ImportDialog() {
           setBusy(false)
         }
       } else {
-        toast('请选择 .pptx 或 .json 文件', 'error')
+        toast(t('pptx.import.chooseFile'), 'error')
       }
     } catch (error) {
       handleError(error)
@@ -112,12 +114,12 @@ export function ImportDialog() {
 
   // 预览视图：SVG 缩略网格 + 降级提示 + 返回/确认
   if (preview) {
-    const items = formatSkipped(preview.report)
+    const items = formatSkipped(preview.report, t)
     return (
-      <Modal title="导入预览" width={760}>
+      <Modal title={t('pptx.import.previewTitle')} width={760}>
         <div ref={gridRef} className="grid max-h-[60vh] grid-cols-3 gap-3 overflow-auto" />
         {items.length > 0 && (
-          <div className="mt-2 text-xs text-gray-500">部分内容预览/还原存在降级：{items.join('、')}</div>
+          <div className="mt-2 text-xs text-gray-500">{t('pptx.import.degraded', { items: items.join(t('pptx.listSeparator')) })}</div>
         )}
         <div className="mt-4 flex justify-end gap-2">
           <button
@@ -125,7 +127,7 @@ export function ImportDialog() {
             disabled={busy}
             onClick={() => setPreview(null)}
           >
-            返回
+            {t('pptx.import.back')}
           </button>
           <button
             className="rounded-lg bg-[#d14424] px-4 py-2 text-sm text-white hover:bg-[#b93a1d] disabled:opacity-50"
@@ -139,7 +141,7 @@ export function ImportDialog() {
               })
             }}
           >
-            确认导入（可编辑）
+            {t('pptx.import.confirm')}
           </button>
         </div>
       </Modal>
@@ -147,7 +149,7 @@ export function ImportDialog() {
   }
 
   return (
-    <Modal title="导入">
+    <Modal title={t('pptx.import.title')}>
       <label className="block cursor-pointer rounded-xl border-2 border-dashed border-gray-300 px-6 py-10 text-center hover:border-[#d14424]">
         <input
           type="file"
@@ -160,10 +162,10 @@ export function ImportDialog() {
             e.target.value = ''
           }}
         />
-        <div className="text-sm text-gray-600">点击选择文件</div>
-        <div className="mt-1 text-xs text-gray-400">支持 .pptx（PowerPoint 演示文稿）与 .json（本工具工程文件）</div>
-        <div className="mt-2 text-[11px] text-gray-400">PPTX 将先展示高保真预览，确认后再导入为可编辑内容</div>
-        <div className="mt-2 text-[11px] text-gray-400">PPTX 导入尽力还原文本、形状、图片、表格与线条；复杂图表与艺术效果可能有差异</div>
+        <div className="text-sm text-gray-600">{t('pptx.import.choose')}</div>
+        <div className="mt-1 text-xs text-gray-400">{t('pptx.import.support')}</div>
+        <div className="mt-2 text-[11px] text-gray-400">{t('pptx.import.previewNote')}</div>
+        <div className="mt-2 text-[11px] text-gray-400">{t('pptx.import.limitNote')}</div>
       </label>
     </Modal>
   )

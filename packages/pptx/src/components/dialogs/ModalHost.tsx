@@ -1,4 +1,5 @@
 // 通用模态框壳 + 模态分发
+import { useI18n } from '@eflink-tech/office-kit'
 import { useUIStore } from '../../store/uiStore'
 import { TemplateDialog } from './TemplateDialog'
 import { ThemeDialog } from './ThemeDialog'
@@ -8,13 +9,14 @@ import { FindReplaceDialog } from './FindReplaceDialog'
 import { HotkeyDialog } from './HotkeyDialog'
 
 export function Modal({ title, children, width = 520 }: { title: string; children: React.ReactNode; width?: number }) {
+  const { t } = useI18n()
   const closeModal = useUIStore((s) => s.closeModal)
   return (
     <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/40" onMouseDown={(e) => { if (e.target === e.currentTarget) closeModal() }}>
       <div className="modal-pop max-h-[85vh] overflow-hidden rounded-xl bg-white shadow-2xl" style={{ width }}>
         <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3">
           <span className="text-sm font-semibold text-gray-700">{title}</span>
-          <button className="rounded p-1 text-gray-400 hover:bg-gray-100" onClick={closeModal}>✕</button>
+          <button className="rounded p-1 text-gray-400 hover:bg-gray-100" aria-label={t('action.close')} title={t('action.close')} onClick={closeModal}>✕</button>
         </div>
         <div className="max-h-[75vh] overflow-y-auto p-5">{children}</div>
       </div>

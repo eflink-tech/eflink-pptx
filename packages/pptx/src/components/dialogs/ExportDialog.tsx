@@ -1,6 +1,7 @@
 // 导出对话框：PPTX / 图片 / JSON / 打印
 import { useState } from 'react'
 import { Loader2 } from 'lucide-react'
+import { useI18n } from '@eflink-tech/office-kit'
 import { Modal } from './ModalHost'
 import { useEditorStore } from '../../store/editorStore'
 import { useUIStore, useToastStore } from '../../store/uiStore'
@@ -10,15 +11,17 @@ import { exportPPTX } from '../../core/export/pptx'
 
 /** 执行中按钮的标签：spinner +「导出中」+ 进度（如有） */
 function BusyLabel({ progress }: { progress?: string }) {
+  const { t } = useI18n()
   return (
     <span className="inline-flex items-center gap-1.5">
       <Loader2 size={14} className="animate-spin" />
-      导出中{progress ? ` (${progress})` : '…'}
+      {t('pptx.export.busy')}{progress ? ` (${progress})` : '…'}
     </span>
   )
 }
 
 export function ExportDialog() {
+  const { t } = useI18n()
   const [busy, setBusy] = useState('')
   const [progress, setProgress] = useState('')
   const toast = useToastStore.getState().toast
@@ -34,7 +37,7 @@ export function ExportDialog() {
     }
     const win = window.open('', '_blank')
     if (!win) {
-      toast('打印窗口被拦截，请允许弹出窗口', 'error')
+      toast(t('pptx.export.popupBlocked'), 'error')
       return
     }
     win.document.write(`<!DOCTYPE html><html><head><title>${store.docName}</title><style>
@@ -50,9 +53,9 @@ export function ExportDialog() {
     setBusy(key)
     try {
       await fn()
-      if (key !== 'pptx') toast('导出完成', 'success')
+      if (key !== 'pptx') toast(t('pptx.export.done'), 'success')
     } catch (error) {
-      toast(`导出失败：${error instanceof Error ? error.message : '未知错误'}`, 'error')
+      toast(t('pptx.export.failed', { message: error instanceof Error ? error.message : t('pptx.export.unknownError') }), 'error')
     } finally {
       setBusy('')
       setProgress('')
@@ -60,7 +63,7 @@ export function ExportDialog() {
   }
 
   return (
-    <Modal title="导出">
+    <Modal title={t('pptx.export.title')}>
       <div className="space-y-2.5">
         <button
           className="w-full rounded-lg border border-gray-200 px-4 py-3 text-left hover:border-[#d14424] disabled:opacity-50"
@@ -72,14 +75,14 @@ export function ExportDialog() {
           data-testid="export-pptx"
         >
           <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
-            {busy === 'pptx' ? <BusyLabel progress={progress} /> : '导出 PPTX'}
+            {busy === 'pptx' ? <BusyLabel progress={progress} /> : t('pptx.export.pptx')}
           </div>
-          <div className="mt-0.5 text-xs text-gray-400">文本/形状/图片/表格/图表转为原生 PPT 对象，可用 PowerPoint / WPS 打开</div>
+          <div className="mt-0.5 text-xs text-gray-400">{t('pptx.export.pptxDesc')}</div>
         </button>
 
         <div className="rounded-lg border border-gray-200 px-4 py-3">
-          <div className="text-sm font-medium text-gray-700">导出图片</div>
-          <div className="mt-0.5 mb-2 text-xs text-gray-400">多页时打包为 zip</div>
+          <div className="text-sm font-medium text-gray-700">{t('pptx.export.images')}</div>
+          <div className="mt-0.5 mb-2 text-xs text-gray-400">{t('pptx.export.imagesDesc')}</div>
           <div className="flex gap-2">
             <button
               className="rounded border border-gray-200 px-3 py-1 text-xs hover:bg-gray-50 disabled:opacity-50"
@@ -114,7 +117,7 @@ export function ExportDialog() {
                 await exportImages([store.presentation.slides[store.slideIndex]], store.presentation, 'png', store.docName)
               })}
             >
-              仅当前页
+              {t('pptx.export.current')}
             </button>
           </div>
         </div>
@@ -127,8 +130,8 @@ export function ExportDialog() {
             exportJSON(store.presentation, store.docName)
           })}
         >
-          <div className="text-sm font-medium text-gray-700">导出 JSON</div>
-          <div className="mt-0.5 text-xs text-gray-400">完整工程数据，可在本工具重新导入继续编辑</div>
+          <div className="text-sm font-medium text-gray-700">{t('pptx.export.json')}</div>
+          <div className="mt-0.5 text-xs text-gray-400">{t('pptx.export.jsonDesc')}</div>
         </button>
 
         <button
@@ -140,9 +143,9 @@ export function ExportDialog() {
           })}
         >
           <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
-            {busy === 'pdf' ? <BusyLabel progress={progress} /> : '打印 / 导出 PDF'}
+            {busy === 'pdf' ? <BusyLabel progress={progress} /> : t('pptx.export.print')}
           </div>
-          <div className="mt-0.5 text-xs text-gray-400">通过浏览器打印对话框另存为 PDF</div>
+          <div className="mt-0.5 text-xs text-gray-400">{t('pptx.export.printDesc')}</div>
         </button>
       </div>
     </Modal>

@@ -1,5 +1,6 @@
 // 查找替换（作用于全部页面的文本元素）
 import { useState } from 'react'
+import { useI18n } from '@eflink-tech/office-kit'
 import { Modal } from './ModalHost'
 import { useEditorStore } from '../../store/editorStore'
 import { useUIStore, useToastStore } from '../../store/uiStore'
@@ -11,6 +12,7 @@ function stripHTML(html: string): string {
 }
 
 export function FindReplaceDialog() {
+  const { t } = useI18n()
   const [find, setFind] = useState('')
   const [replace, setReplace] = useState('')
   const [hits, setHits] = useState<Array<{ slideIndex: number; elId: string; preview: string }>>([])
@@ -58,15 +60,15 @@ export function FindReplaceDialog() {
       store.pushHistory()
       store.replacePresentation(pres)
       useEditorStore.setState({ slideIndex: store.slideIndex })
-      toast(`已替换 ${count} 处`, 'success')
+      toast(t('pptx.find.replaced', { count }), 'success')
       doFind()
     } else {
-      toast('没有找到可替换内容', 'error')
+      toast(t('pptx.find.nothingToReplace'), 'error')
     }
   }
 
   return (
-    <Modal title="查找替换">
+    <Modal title={t('pptx.find.title')}>
       <div className="space-y-3">
         <div className="flex gap-2">
           <input
@@ -74,42 +76,42 @@ export function FindReplaceDialog() {
             value={find}
             onChange={(e) => setFind(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && doFind()}
-            placeholder="查找内容"
+            placeholder={t('pptx.find.placeholder')}
             className="flex-1 rounded border border-gray-200 px-2.5 py-1.5 text-sm focus:border-[#d14424] focus:outline-none"
           />
           <button className="rounded bg-[#d14424] px-4 py-1.5 text-sm text-white hover:bg-[#b93a1d]" onClick={doFind}>
-            查找
+            {t('action.find')}
           </button>
         </div>
         <div className="flex gap-2">
           <input
             value={replace}
             onChange={(e) => setReplace(e.target.value)}
-            placeholder="替换为（可留空）"
+            placeholder={t('pptx.find.replacePlaceholder')}
             className="flex-1 rounded border border-gray-200 px-2.5 py-1.5 text-sm focus:border-[#d14424] focus:outline-none"
           />
           <button className="rounded border border-[#d14424] px-4 py-1.5 text-sm text-[#d14424] hover:bg-[#fbeae5]" onClick={doReplaceAll}>
-            全部替换
+            {t('pptx.find.replaceAll')}
           </button>
         </div>
 
         {searched && (
           <div className="max-h-56 space-y-1 overflow-y-auto rounded-lg bg-gray-50 p-2">
             {hits.length === 0
-              ? <div className="p-2 text-center text-xs text-gray-400">未找到「{find}」</div>
+              ? <div className="p-2 text-center text-xs text-gray-400">{t('pptx.find.noHits', { query: find })}</div>
               : hits.map((hit, i) => (
                 <button
                   key={i}
                   className="block w-full rounded px-2 py-1.5 text-left text-xs hover:bg-white"
                   onClick={() => gotoHit(hit)}
                 >
-                  <span className="mr-2 text-gray-400">第 {hit.slideIndex + 1} 页</span>
+                  <span className="mr-2 text-gray-400">{t('pptx.find.slide', { index: hit.slideIndex + 1 })}</span>
                   <span className="text-gray-600">…{hit.preview}…</span>
                 </button>
               ))}
           </div>
         )}
-        <div className="text-[11px] text-gray-400">共 {hits.length} 个结果 · 替换将保留文本元素的其余格式</div>
+        <div className="text-[11px] text-gray-400">{t('pptx.find.summary', { count: hits.length })}</div>
       </div>
     </Modal>
   )

@@ -1,11 +1,13 @@
 // 底部状态栏：文档名（点击改名）/ 保存状态 / 页码导航 / 网格 / 缩放
 import { useRef, useState } from 'react'
 import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Pencil } from 'lucide-react'
+import { useI18n } from '@eflink-tech/office-kit'
 import { useEditorStore } from '../../store/editorStore'
 import { useUIStore, useToastStore } from '../../store/uiStore'
 import { renameDoc } from '../../core/editor/persistence'
 
 export function BottomBar() {
+  const { t } = useI18n()
   const slideCount = useEditorStore((s) => s.presentation.slides.length)
   const slideIndex = useEditorStore((s) => s.slideIndex)
   const docName = useEditorStore((s) => s.docName)
@@ -26,7 +28,7 @@ export function BottomBar() {
       await renameDoc(s.docId, name, s.presentation)
       useEditorStore.getState().renameDocument(name)
     } catch {
-      useToastStore.getState().toast('重命名失败，请重试', 'error')
+      useToastStore.getState().toast(t('pptx.status.renameFailed'), 'error')
     }
   }
 
@@ -68,7 +70,7 @@ export function BottomBar() {
             : (
                 <button
                   className="flex min-w-0 items-center gap-1 rounded px-1.5 py-0.5 text-left text-[#666] transition-colors hover:bg-[#e8e8e8]"
-                  title="点击重命名"
+                  title={t('pptx.status.renameHint')}
                   onClick={() => setNameEditing(true)}
                 >
                   <Pencil size={11} className="shrink-0 text-[#999]" />
@@ -78,10 +80,10 @@ export function BottomBar() {
         </div>
 
         {/* 保存状态指示：dirty = 红色未保存；干净 = 灰色已保存（手动 ⌘S/Ctrl+S 云端保存成功后更新） */}
-        <span className="shrink-0" data-testid="save-state" title={dirty ? '有未保存的修改，按 Ctrl+S 保存' : '所有修改已保存'}>
+        <span className="shrink-0" data-testid="save-state" title={dirty ? t('pptx.status.unsavedHint') : t('pptx.status.savedHint')}>
           {dirty
-            ? <span className="text-[#e02e2e]">● 未保存</span>
-            : <span className="text-gray-400">✓ 已保存</span>}
+            ? <span className="text-[#e02e2e]">● {t('shell.unsaved')}</span>
+            : <span className="text-gray-400">✓ {t('shell.saved')}</span>}
         </span>
 
         <div className="h-3.5 w-px shrink-0 bg-[#e0e0e0]" />
@@ -99,7 +101,7 @@ export function BottomBar() {
 
       <div className="flex shrink-0 items-center gap-2">
         <button className={`rounded px-2 py-0.5 ${gridVisible ? 'bg-[#fbeae5] text-[#d14424]' : 'hover:bg-[#e8e8e8]'}`} onClick={() => useUIStore.getState().toggleGrid()}>
-          网格
+           {t('pptx.view.grid')}
         </button>
         <div className="flex items-center gap-1">
           <button className="rounded p-1 hover:bg-[#e8e8e8]" onClick={() => setScale((canvasScale > 0 ? canvasScale : 1) - 0.1)}>
@@ -107,11 +109,11 @@ export function BottomBar() {
           </button>
           <button
             className="w-14 rounded px-1 py-0.5 text-center hover:bg-[#e8e8e8]"
-            title="点击恢复自适应"
+            title={t('pptx.status.fitHint')}
             onClick={() => setScale(0)}
             data-testid="zoom-level"
           >
-            {percent ? `${percent}%` : '自适应'}
+            {percent ? `${percent}%` : t('pptx.status.fit')}
           </button>
           <button className="rounded p-1 hover:bg-[#e8e8e8]" onClick={() => setScale((canvasScale > 0 ? canvasScale : 1) + 0.1)}>
             <ZoomIn size={14} />

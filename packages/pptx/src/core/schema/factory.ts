@@ -51,14 +51,30 @@ export function createTableElement(x: number, y: number, rows = 4, cols = 4): Ta
   }
 }
 
-export function createChartElement(x: number, y: number, chartType: ChartElement['chartType'] = 'bar-cluster'): ChartElement {
+type Translate = (key: string, vars?: Record<string, string | number>) => string
+
+export function createChartElement(
+  x: number,
+  y: number,
+  chartType: ChartElement['chartType'] = 'bar-cluster',
+  t?: Translate,
+): ChartElement {
+  const labels = t
+    ? [
+        t('pptx.chart.sample.month1'),
+        t('pptx.chart.sample.month2'),
+        t('pptx.chart.sample.month3'),
+        t('pptx.chart.sample.month4'),
+      ]
+    : ['一月', '二月', '三月', '四月']
+  const seriesName = (n: number) => (t ? t('pptx.chart.seriesName', { n }) : `系列${n}`)
   return {
     id: genId('c-'), type: 'chart', x, y, w: 560, h: 380, chartType,
     data: {
-      labels: ['一月', '二月', '三月', '四月'],
+      labels,
       series: [
-        { name: '系列1', values: [80, 65, 90, 72] },
-        { name: '系列2', values: [55, 78, 60, 85] },
+        { name: seriesName(1), values: [80, 65, 90, 72] },
+        { name: seriesName(2), values: [55, 78, 60, 85] },
       ],
     },
     elements: { ...DEFAULT_CHART_ELEMENTS }, paletteIndex: 0, fontSize: 14, name: '图表',

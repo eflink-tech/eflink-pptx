@@ -1,8 +1,11 @@
 /** @eflink-tech/pptx 对外导出面：编辑器组件 + store + 持久化辅助 + 数据模型 */
+import '@eflink-tech/office-kit/styles.css'
 import './styles.css'
 
 // 组件
 export { PptxEditor } from './PptxEditor'
+export type { PptxEditorProps } from './PptxEditor'
+export type { OfficeLocale as PptxLocale } from '@eflink-tech/office-kit'
 export { setPptxStorageBackend } from './core/editor/persistence'
 export { setEditorBackHref } from './core/editor/chrome'
 export type { PptxStorageBackend } from './core/editor/persistence'

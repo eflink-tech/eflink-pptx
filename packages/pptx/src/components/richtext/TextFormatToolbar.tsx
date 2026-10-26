@@ -5,11 +5,12 @@ import {
   AlignLeft, AlignCenter, AlignRight, AlignJustify, List, ListOrdered,
   RemoveFormatting, Link2, Code, Eraser,
 } from 'lucide-react'
+import { useI18n } from '@eflink-tech/office-kit'
 import { richTextController } from './RichTextEditor'
 import { ColorInput } from '../color/ColorInput'
 
 const FONT_FAMILIES = [
-  { value: '', label: '字体' },
+  { value: '', label: '' },
   { value: 'Microsoft YaHei', label: '微软雅黑' },
   { value: 'SimSun', label: '宋体' },
   { value: 'SimHei', label: '黑体' },
@@ -42,6 +43,7 @@ function TB({ icon, label, onClick, active }: {
 }
 
 export function TextFormatToolbar() {
+  const { t } = useI18n()
   const [state, setState] = useState({
     bold: false, italic: false, underline: false, strike: false,
     superscript: false, subscript: false, code: false,
@@ -79,7 +81,7 @@ export function TextFormatToolbar() {
   const exec = (fn: Parameters<typeof richTextController.exec>[0]) => richTextController.exec(fn)
 
   const setLink = () => {
-    const url = window.prompt('链接地址（留空取消）')
+    const url = window.prompt(t('pptx.rich.linkPrompt'))
     exec((editor) => {
       if (url) editor.chain().focus().setLink({ href: url }).run()
       else editor.chain().focus().unsetLink().run()
@@ -97,28 +99,28 @@ export function TextFormatToolbar() {
         onChange={(e) => exec((ed) => (e.target.value ? ed.chain().focus().setFontFamily(e.target.value).run() : ed.chain().focus().unsetFontFamily().run()))}
         className="h-7 rounded border border-gray-200 px-1 text-xs"
       >
-        {FONT_FAMILIES.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
+        {FONT_FAMILIES.map((f) => <option key={f.value} value={f.value}>{f.value ? f.label : t('pptx.rich.font')}</option>)}
       </select>
 
       <select
         value={state.fontSize}
         onChange={(e) => exec((ed) => ed.chain().focus().setFontSize(`${e.target.value}px`).run())}
         className="h-7 w-16 rounded border border-gray-200 px-1 text-xs"
-        title="字号（px）"
+        title={t('pptx.rich.fontSizeTitle')}
       >
-        {!state.fontSize && <option value={0}>字号</option>}
+        {!state.fontSize && <option value={0}>{t('pptx.rich.fontSize')}</option>}
         {FONT_SIZES.map((s) => <option key={s} value={s}>{s}</option>)}
       </select>
 
       <div className="mx-0.5 h-5 w-px bg-gray-200" />
 
-      <TB icon={<Bold size={14} />} label="加粗" active={state.bold} onClick={() => exec((ed) => ed.chain().focus().toggleBold().run())} />
-      <TB icon={<Italic size={14} />} label="斜体" active={state.italic} onClick={() => exec((ed) => ed.chain().focus().toggleItalic().run())} />
-      <TB icon={<Underline size={14} />} label="下划线" active={state.underline} onClick={() => exec((ed) => ed.chain().focus().toggleUnderline().run())} />
-      <TB icon={<Strikethrough size={14} />} label="删除线" active={state.strike} onClick={() => exec((ed) => ed.chain().focus().toggleStrike().run())} />
-      <TB icon={<Code size={14} />} label="代码" active={state.code} onClick={() => exec((ed) => ed.chain().focus().toggleCode().run())} />
-      <TB icon={<Superscript size={14} />} label="上标" active={state.superscript} onClick={() => exec((ed) => ed.chain().focus().toggleSuperscript().run())} />
-      <TB icon={<Subscript size={14} />} label="下标" active={state.subscript} onClick={() => exec((ed) => ed.chain().focus().toggleSubscript().run())} />
+      <TB icon={<Bold size={14} />} label={t('pptx.rich.bold')} active={state.bold} onClick={() => exec((ed) => ed.chain().focus().toggleBold().run())} />
+      <TB icon={<Italic size={14} />} label={t('pptx.rich.italic')} active={state.italic} onClick={() => exec((ed) => ed.chain().focus().toggleItalic().run())} />
+      <TB icon={<Underline size={14} />} label={t('pptx.rich.underline')} active={state.underline} onClick={() => exec((ed) => ed.chain().focus().toggleUnderline().run())} />
+      <TB icon={<Strikethrough size={14} />} label={t('pptx.rich.strike')} active={state.strike} onClick={() => exec((ed) => ed.chain().focus().toggleStrike().run())} />
+      <TB icon={<Code size={14} />} label={t('pptx.rich.code')} active={state.code} onClick={() => exec((ed) => ed.chain().focus().toggleCode().run())} />
+      <TB icon={<Superscript size={14} />} label={t('pptx.rich.superscript')} active={state.superscript} onClick={() => exec((ed) => ed.chain().focus().toggleSuperscript().run())} />
+      <TB icon={<Subscript size={14} />} label={t('pptx.rich.subscript')} active={state.subscript} onClick={() => exec((ed) => ed.chain().focus().toggleSubscript().run())} />
 
       <span className="mx-0.5 flex items-center gap-1">
         <ColorInput
@@ -137,18 +139,18 @@ export function TextFormatToolbar() {
 
       <div className="mx-0.5 h-5 w-px bg-gray-200" />
 
-      <TB icon={<AlignLeft size={14} />} label="左对齐" active={state.align === 'left'} onClick={() => exec((ed) => ed.chain().focus().setTextAlign('left').run())} />
-      <TB icon={<AlignCenter size={14} />} label="居中" active={state.align === 'center'} onClick={() => exec((ed) => ed.chain().focus().setTextAlign('center').run())} />
-      <TB icon={<AlignRight size={14} />} label="右对齐" active={state.align === 'right'} onClick={() => exec((ed) => ed.chain().focus().setTextAlign('right').run())} />
-      <TB icon={<AlignJustify size={14} />} label="两端对齐" active={state.align === 'justify'} onClick={() => exec((ed) => ed.chain().focus().setTextAlign('justify').run())} />
+      <TB icon={<AlignLeft size={14} />} label={t('pptx.rich.alignLeft')} active={state.align === 'left'} onClick={() => exec((ed) => ed.chain().focus().setTextAlign('left').run())} />
+      <TB icon={<AlignCenter size={14} />} label={t('pptx.rich.alignCenter')} active={state.align === 'center'} onClick={() => exec((ed) => ed.chain().focus().setTextAlign('center').run())} />
+      <TB icon={<AlignRight size={14} />} label={t('pptx.rich.alignRight')} active={state.align === 'right'} onClick={() => exec((ed) => ed.chain().focus().setTextAlign('right').run())} />
+      <TB icon={<AlignJustify size={14} />} label={t('pptx.rich.alignJustify')} active={state.align === 'justify'} onClick={() => exec((ed) => ed.chain().focus().setTextAlign('justify').run())} />
 
       <div className="mx-0.5 h-5 w-px bg-gray-200" />
 
-      <TB icon={<List size={14} />} label="无序列表" onClick={() => exec((ed) => ed.chain().focus().toggleBulletList().run())} />
-      <TB icon={<ListOrdered size={14} />} label="有序列表" onClick={() => exec((ed) => ed.chain().focus().toggleOrderedList().run())} />
-      <TB icon={<Link2 size={14} />} label="链接" active={state.canLink} onClick={setLink} />
-      <TB icon={<Eraser size={14} />} label="清除颜色" onClick={() => exec((ed) => ed.chain().focus().unsetColor().run())} />
-      <TB icon={<RemoveFormatting size={14} />} label="清除格式" onClick={() => exec((ed) => ed.chain().focus().unsetAllMarks().run())} />
+      <TB icon={<List size={14} />} label={t('pptx.rich.bulletList')} onClick={() => exec((ed) => ed.chain().focus().toggleBulletList().run())} />
+      <TB icon={<ListOrdered size={14} />} label={t('pptx.rich.orderedList')} onClick={() => exec((ed) => ed.chain().focus().toggleOrderedList().run())} />
+      <TB icon={<Link2 size={14} />} label={t('pptx.rich.link')} active={state.canLink} onClick={setLink} />
+      <TB icon={<Eraser size={14} />} label={t('pptx.rich.clearColor')} onClick={() => exec((ed) => ed.chain().focus().unsetColor().run())} />
+      <TB icon={<RemoveFormatting size={14} />} label={t('pptx.rich.clearFormat')} onClick={() => exec((ed) => ed.chain().focus().unsetAllMarks().run())} />
     </div>
   )
 }

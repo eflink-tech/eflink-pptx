@@ -1,6 +1,7 @@
 // 插入菜单：文本/形状/线条/表格/图表/音视频/公式
 import { useEffect, useRef, useState } from 'react'
 import { ChevronDown, Type, Spline, Table2, BarChart3, Video, Music, Sigma } from 'lucide-react'
+import { useI18n } from '@eflink-tech/office-kit'
 import { useEditorStore } from '../../store/editorStore'
 import {
   createAudioElement, createChartElement, createFormulaElement,
@@ -46,7 +47,11 @@ function ShapePreview({ meta }: { meta: ShapeMeta }) {
 
 const DROPDOWN_KEYS = new Set(['shape', 'line', 'chart'])
 
+/** 线条预设 id 的 kebab-case → camelCase（用于文案 key） */
+const toCamelCase = (id: string) => id.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase())
+
 export function InsertMenu() {
+  const { t } = useI18n()
   const [open, setOpen] = useState<string | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
 
@@ -101,15 +106,15 @@ export function InsertMenu() {
   }
 
   const items: Array<{ key: string; label: string; icon: React.ReactNode; onClick: () => void }> = [
-    { key: 'text', label: '文本框', icon: <Type size={15} />, onClick: () => insertCentered((x, y) => createTextElement(x, y)) },
-    { key: 'shape', label: '形状', icon: <SquareIcon />, onClick: () => toggleDropdown('shape') },
-    { key: 'line', label: '线条', icon: <Spline size={15} />, onClick: () => toggleDropdown('line') },
-    { key: 'table', label: '表格', icon: <Table2 size={15} />, onClick: () => insertCentered((x, y) => createTableElement(x, y)) },
-    { key: 'chart', label: '图表', icon: <BarChart3 size={15} />, onClick: () => toggleDropdown('chart') },
-    { key: 'image', label: '图片', icon: <ImageIcon />, onClick: insertImage },
-    { key: 'video', label: '视频', icon: <Video size={15} />, onClick: () => insertMedia('video') },
-    { key: 'audio', label: '音频', icon: <Music size={15} />, onClick: () => insertMedia('audio') },
-    { key: 'formula', label: '公式', icon: <Sigma size={15} />, onClick: () => insertCentered((x, y) => createFormulaElement(x, y)) },
+    { key: 'text', label: t('pptx.insert.text'), icon: <Type size={15} />, onClick: () => insertCentered((x, y) => createTextElement(x, y)) },
+    { key: 'shape', label: t('pptx.insert.shape'), icon: <SquareIcon />, onClick: () => toggleDropdown('shape') },
+    { key: 'line', label: t('pptx.insert.line'), icon: <Spline size={15} />, onClick: () => toggleDropdown('line') },
+    { key: 'table', label: t('pptx.insert.table'), icon: <Table2 size={15} />, onClick: () => insertCentered((x, y) => createTableElement(x, y)) },
+    { key: 'chart', label: t('pptx.insert.chart'), icon: <BarChart3 size={15} />, onClick: () => toggleDropdown('chart') },
+    { key: 'image', label: t('pptx.insert.image'), icon: <ImageIcon />, onClick: insertImage },
+    { key: 'video', label: t('pptx.insert.video'), icon: <Video size={15} />, onClick: () => insertMedia('video') },
+    { key: 'audio', label: t('pptx.insert.audio'), icon: <Music size={15} />, onClick: () => insertMedia('audio') },
+    { key: 'formula', label: t('pptx.insert.formula'), icon: <Sigma size={15} />, onClick: () => insertCentered((x, y) => createFormulaElement(x, y)) },
   ]
 
   return (
@@ -137,14 +142,14 @@ export function InsertMenu() {
             <div className="absolute left-0 top-9 z-50 max-h-[70vh] w-[420px] overflow-y-auto rounded-lg border border-gray-200 bg-white p-3 shadow-xl">
               {SHAPE_CATEGORIES.map((cat) => (
                 <div key={cat.id} className="mb-3">
-                  <div className="mb-1.5 text-xs font-medium text-gray-400">{cat.name}</div>
+                  <div className="mb-1.5 text-xs font-medium text-gray-400">{t(`pptx.shape.category.${cat.id}`)}</div>
                   <div className="grid grid-cols-8 gap-1.5">
                     {Object.entries(SHAPE_PATHS)
                       .filter(([, meta]) => meta.category === cat.id)
                       .map(([key, meta]) => (
                         <button
                           key={key}
-                          title={meta.name}
+                          title={t(`pptx.shape.name.${key}`)}
                           className="flex items-center justify-center rounded-md p-1.5 hover:bg-[#fbeae5]"
                           onClick={() => {
                             insertCentered((x, y) => createShapeElement(x, y, key))
@@ -166,13 +171,13 @@ export function InsertMenu() {
                 <div key={group.id} className="mb-3 last:mb-0">
                   <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-gray-500">
                     <span className="h-3 w-0.5 rounded bg-gray-300" />
-                    {group.name}
+                    {t(`pptx.line.group.${group.id}`)}
                   </div>
                   <div className={`grid gap-1.5 ${group.id === 'straight' ? 'grid-cols-5' : 'grid-cols-4'}`}>
                     {group.presets.map((preset) => (
                       <button
                         key={preset.id}
-                        title={preset.id}
+                        title={t(`pptx.line.preset.${toCamelCase(preset.id)}`)}
                         className="flex items-center justify-center rounded-md border border-transparent p-1.5 text-gray-600 hover:border-[#d14424]/30 hover:bg-[#fbeae5] hover:text-[#d14424]"
                         onClick={() => {
                           insertLinePreset(preset.id)
@@ -192,7 +197,7 @@ export function InsertMenu() {
             <ChartPickerPanel
               onPick={(chartType: ChartType) => {
                 setOpen(null)
-                insertCentered((x, y) => createChartElement(x, y, chartType))
+                insertCentered((x, y) => createChartElement(x, y, chartType, t))
               }}
               onClose={() => setOpen(null)}
             />

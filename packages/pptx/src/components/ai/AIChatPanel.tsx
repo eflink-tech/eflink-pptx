@@ -1,5 +1,6 @@
 // AI 助手面板：设置 / 对话 / 生成大纲与整套页面 / 选中元素润色 / 会话历史
 import { useEffect, useRef, useState } from 'react'
+import { useI18n } from '@eflink-tech/office-kit'
 import { Settings, Trash2, X, Wand2, FileDown, Sparkles, History, ChevronLeft } from 'lucide-react'
 import { useEditorStore } from '../../store/editorStore'
 import { useUIStore, useToastStore } from '../../store/uiStore'
@@ -15,6 +16,7 @@ import { genId } from '../../core/utils/id'
 type PanelView = 'chat' | 'settings' | 'history'
 
 export function AIChatPanel() {
+  const { t } = useI18n()
   const ui = useUIStore()
   const [view, setView] = useState<PanelView>('chat')
   const [settings, setSettings] = useState<AISettings>({ baseUrl: '', apiKey: '', model: '' })
@@ -49,12 +51,12 @@ export function AIChatPanel() {
     const now = Date.now()
     void aiDb.conversations.put({
       id,
-      title: messages[0]?.content.replace(/\n/g, ' ').slice(0, 24) || '新对话',
+      title: messages[0]?.content.replace(/\n/g, ' ').slice(0, 24) || t('pptx.ai.newChat'),
       messages: messages.map((m) => ({ ...m, time: now })),
       createdAt: now,
       updatedAt: now,
     })
-  }, [messages, convId])
+  }, [messages, convId, t])
 
   const loadHistory = () => {
     void aiDb.conversations.orderBy('updatedAt').reverse().toArray().then(setHistoryList)
@@ -74,7 +76,7 @@ export function AIChatPanel() {
     await aiSettingsStore.saveSettings(settings)
     setConfigured(Boolean(settings.baseUrl && settings.apiKey && settings.model))
     setView('chat')
-    useToastStore.getState().toast('AI 设置已保存', 'success')
+    useToastStore.getState().toast(t('pptx.ai.settingsSaved'), 'success')
   }
 
   const doSend = async (userText: string, onText?: (text: string) => string) => {
@@ -116,7 +118,7 @@ export function AIChatPanel() {
 
   const generateOutline = async () => {
     if (!topic.trim()) {
-      useToastStore.getState().toast('请输入主题', 'error')
+      useToastStore.getState().toast(t('pptx.ai.enterTopic'), 'error')
       return
     }
     const tpl = BUILTIN_TEMPLATES[0]
@@ -125,7 +127,7 @@ export function AIChatPanel() {
       .replace('{count}', String(pageCount))
     const s = await aiSettingsStore.getSettings()
     setBusy(true)
-    setMessages((prev) => [...prev, { role: 'user', content: `生成大纲：${topic.trim()}（${pageCount} 页）` }])
+    setMessages((prev) => [...prev, { role: 'user', content: t('pptx.ai.userGenOutlineMsg', { topic: topic.trim(), count: pageCount }) }])
     try {
       const { content } = await sendMessage({
         settings: s,
@@ -136,7 +138,7 @@ export function AIChatPanel() {
       })
       const result = parseOutline(content)
       setOutline(result)
-      setMessages((prev) => [...prev, { role: 'assistant', content: `已生成「${result.topic}」大纲，共 ${result.slides.length} 页。\n${result.slides.map((sl, i) => `${i + 1}. ${sl.title}`).join('\n')}` }])
+      setMessages((prev) => [...prev, { role: 'assistant', content: `${t('pptx.ai.genOutlineDone', { topic: result.topic, count: result.slides.length })}\n${result.slides.map((sl, i) => `${i + 1}. ${sl.title}`).join('\n')}` }])
     } catch (error) {
       useToastStore.getState().toast(errorMessage(error), 'error')
       setMessages((prev) => [...prev, { role: 'assistant', content: `⚠️ ${errorMessage(error)}` }])
@@ -151,7 +153,7 @@ export function AIChatPanel() {
     const prompt = buildDeckPrompt(outline, store.presentation.theme.colors)
     const s = await aiSettingsStore.getSettings()
     setBusy(true)
-    setMessages((prev) => [...prev, { role: 'user', content: '根据大纲生成整套页面版式…' }])
+    setMessages((prev) => [...prev, { role: 'user', content: t('pptx.ai.userGenSlidesMsg') }])
     try {
       const { content } = await sendMessage({
         settings: s,
@@ -162,7 +164,7 @@ export function AIChatPanel() {
         onContentChunk: (_c, full) => {
           setMessages((prev) => {
             const base = [...prev]
-            if (base[base.length - 1]?.role === 'assistant') base[base.length - 1] = { role: 'assistant', content: `生成中…（${full.length} 字）` }
+            if (base[base.length - 1]?.role === 'assistant') base[base.length - 1] = { role: 'assistant', content: t('pptx.ai.generating', { count: full.length }) }
             return base
           })
         },
@@ -170,8 +172,8 @@ export function AIChatPanel() {
       const slides = parseDeck(content)
       applyGeneratedDeck(slides)
       setGenView(false)
-      useToastStore.getState().toast(`已应用 ${slides.length} 页 AI 生成结果`, 'success')
-      setMessages((prev) => [...prev, { role: 'assistant', content: `已应用 ${slides.length} 页到当前文档。` }])
+      useToastStore.getState().toast(t('pptx.ai.appliedSlides', { count: slides.length }), 'success')
+      setMessages((prev) => [...prev, { role: 'assistant', content: t('pptx.ai.appliedSlidesMsg', { count: slides.length }) }])
     } catch (error) {
       useToastStore.getState().toast(errorMessage(error), 'error')
       setMessages((prev) => [...prev, { role: 'assistant', content: `⚠️ ${errorMessage(error)}` }])
@@ -186,11 +188,11 @@ export function AIChatPanel() {
     const slide = store.presentation.slides[store.slideIndex]
     const el = slide?.elements.find((e) => e.id === store.selectedIds[0])
     if (!el || el.type !== 'text') {
-      useToastStore.getState().toast('请先选中文本元素', 'error')
+      useToastStore.getState().toast(t('pptx.ai.needTextSelection'), 'error')
       return
     }
     const rawText = el.content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
-    const tpl = BUILTIN_TEMPLATES.find((t) => t.id === templateId)
+    const tpl = BUILTIN_TEMPLATES.find((item) => item.id === templateId)
     if (!tpl) return
     await doSend(rawText, (text) => tpl.content.replace('{text}', text))
   }
@@ -217,7 +219,7 @@ export function AIChatPanel() {
       if (d.type !== 'text') return
       d.content = text.split('\n').filter(Boolean).map((line) => `<p>${line}</p>`).join('') || `<p>${text}</p>`
     })
-    useToastStore.getState().toast('已应用到选中元素', 'success')
+    useToastStore.getState().toast(t('pptx.ai.appliedSelection'), 'success')
   }
 
   return (
@@ -226,16 +228,16 @@ export function AIChatPanel() {
       <div className="flex h-10 shrink-0 items-center justify-between border-b border-gray-100 px-3">
         <span className="flex items-center gap-1 text-sm font-medium text-[#d14424]">
           <Sparkles size={15} />
-          AI 助手
+          {t('pptx.ai.title')}
         </span>
         <div className="flex items-center gap-1">
-          <button className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600" title="会话历史" onClick={() => { loadHistory(); setView(view === 'history' ? 'chat' : 'history') }}>
+          <button className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600" title={t('pptx.ai.history')} onClick={() => { loadHistory(); setView(view === 'history' ? 'chat' : 'history') }}>
             <History size={15} />
           </button>
-          <button className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600" title="AI 设置" onClick={() => setView(view === 'settings' ? 'chat' : 'settings')}>
+          <button className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600" title={t('pptx.ai.settings')} onClick={() => setView(view === 'settings' ? 'chat' : 'settings')}>
             <Settings size={15} />
           </button>
-          <button className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600" title="新对话" onClick={() => { setMessages([]); setOutline(null); setConvId(null); setView('chat') }}>
+          <button className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600" title={t('pptx.ai.newChat')} onClick={() => { setMessages([]); setOutline(null); setConvId(null); setView('chat') }}>
             <Trash2 size={15} />
           </button>
           <button className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600" onClick={() => ui.toggleAIPanel()}>
@@ -250,10 +252,10 @@ export function AIChatPanel() {
               {view === 'history' && (
                 <button className="mb-2 flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700" onClick={() => setView('chat')}>
                   <ChevronLeft size={14} />
-                  返回对话
+                  {t('pptx.ai.back')}
                 </button>
               )}
-              {historyList.length === 0 && <div className="py-6 text-center text-xs text-gray-400">暂无历史会话</div>}
+              {historyList.length === 0 && <div className="py-6 text-center text-xs text-gray-400">{t('pptx.ai.noHistory')}</div>}
               <div className="space-y-1.5">
                 {historyList.map((conv) => (
                   <div key={conv.id} className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2">
@@ -261,7 +263,7 @@ export function AIChatPanel() {
                       {conv.title}
                     </button>
                     <span className="shrink-0 text-[10px] text-gray-400">{new Date(conv.updatedAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
-                    <button className="shrink-0 rounded p-0.5 text-gray-400 hover:bg-red-50 hover:text-red-500" title="删除" onClick={() => deleteConversation(conv.id)}>🗑</button>
+                    <button className="shrink-0 rounded p-0.5 text-gray-400 hover:bg-red-50 hover:text-red-500" title={t('pptx.ai.delete')} onClick={() => deleteConversation(conv.id)}>🗑</button>
                   </div>
                 ))}
               </div>
@@ -271,9 +273,9 @@ export function AIChatPanel() {
         ? (
             <div className="flex-1 overflow-y-auto p-3">
               <div className="mb-3 text-xs text-gray-500">
-                配置任意 OpenAI 兼容接口（如通义千问、DeepSeek、Kimi）。密钥仅保存在本地浏览器（IndexedDB），不会上传。
+                {t('pptx.ai.settingsHint')}
               </div>
-              {([['baseUrl', '接口地址', 'https://dashscope.aliyuncs.com/compatible-mode/v1'], ['apiKey', 'API Key', 'sk-…'], ['model', '模型', 'qwen-plus']] as const).map(([key, label, placeholder]) => (
+              {([['baseUrl', t('pptx.ai.baseUrl'), 'https://dashscope.aliyuncs.com/compatible-mode/v1'], ['apiKey', 'API Key', 'sk-…'], ['model', t('pptx.ai.model'), 'qwen-plus']] as const).map(([key, label, placeholder]) => (
                 <div key={key} className="mb-2">
                   <div className="mb-1 text-xs text-gray-500">{label}</div>
                   <input
@@ -286,7 +288,7 @@ export function AIChatPanel() {
                 </div>
               ))}
               <button className="mt-2 w-full rounded-md bg-[#d14424] py-1.5 text-xs text-white hover:bg-[#b93a1d]" onClick={() => void saveSettings()}>
-                保存设置
+                {t('pptx.ai.saveSettings')}
               </button>
             </div>
           )
@@ -302,23 +304,23 @@ export function AIChatPanel() {
                         data-testid="ai-gen-toggle"
                       >
                         <Wand2 size={14} />
-                        AI 生成 PPT
+                        {t('pptx.ai.genTitle')}
                       </button>
                     )
                   : (
                       <div className="rounded-md bg-[#faf7f5] p-2">
                         <div className="mb-1.5 flex items-center justify-between text-xs text-gray-500">
-                          <span>生成流程</span>
-                          <button className="text-gray-400 hover:text-gray-600" onClick={() => setGenView(false)}>收起</button>
+                          <span>{t('pptx.ai.genFlow')}</span>
+                          <button className="text-gray-400 hover:text-gray-600" onClick={() => setGenView(false)}>{t('pptx.ai.collapse')}</button>
                         </div>
                         <input
                           value={topic}
                           onChange={(e) => setTopic(e.target.value)}
-                          placeholder="输入主题，如：2026 产品规划"
+                          placeholder={t('pptx.ai.topicPlaceholder')}
                           className="mb-1.5 w-full rounded border border-gray-200 px-2 py-1.5 text-xs focus:border-[#d14424] focus:outline-none"
                         />
                         <div className="mb-1.5 flex items-center gap-2 text-xs text-gray-500">
-                          页数
+                          {t('pptx.ai.pageCount')}
                           <input
                             type="number"
                             min={3}
@@ -333,21 +335,21 @@ export function AIChatPanel() {
                             onClick={() => void generateOutline()}
                             data-testid="ai-gen-outline"
                           >
-                            生成大纲
+                            {t('pptx.ai.genOutline')}
                           </button>
                         </div>
                         {outline && (
                           <div className="rounded border border-gray-200 bg-white p-2">
-                            <div className="mb-1 text-xs font-medium text-gray-700">大纲 · {outline.topic}（{outline.slides.length} 页）</div>
+                            <div className="mb-1 text-xs font-medium text-gray-700">{t('pptx.ai.outline', { topic: outline.topic, count: outline.slides.length })}</div>
                             <ol className="mb-2 list-decimal space-y-0.5 pl-4 text-xs text-gray-500">
                               {outline.slides.map((s, i) => <li key={i}>{s.title}</li>)}
                             </ol>
                             <div className="flex gap-1.5">
                               <button
                                 className="flex-1 rounded border border-gray-200 py-1 text-xs text-gray-600 hover:bg-gray-50"
-                                onClick={() => { applyOutline(outline); useToastStore.getState().toast('已应用大纲到文档', 'success') }}
+                                onClick={() => { applyOutline(outline); useToastStore.getState().toast(t('pptx.ai.applyOutlineDone'), 'success') }}
                               >
-                                仅应用大纲
+                                {t('pptx.ai.applyOutline')}
                               </button>
                               <button
                                 className="flex-1 rounded bg-[#d14424] py-1 text-xs text-white hover:bg-[#b93a1d] disabled:opacity-50"
@@ -355,7 +357,7 @@ export function AIChatPanel() {
                                 onClick={() => void generateDeck()}
                                 data-testid="ai-gen-deck"
                               >
-                                生成整套页面
+                                {t('pptx.ai.genSlides')}
                               </button>
                             </div>
                           </div>
@@ -370,7 +372,7 @@ export function AIChatPanel() {
                   ? null
                   : (
                       <div className="rounded-md bg-[#fbeae5] p-2 text-xs text-[#b93a1d]">
-                        尚未配置 AI 接口，点击右上角 ⚙️ 进行设置。
+                        {t('pptx.ai.noConfig')}
                       </div>
                     )}
                 {messages.map((m, i) => (
@@ -384,7 +386,7 @@ export function AIChatPanel() {
                     onClick={applyLastToSelection}
                   >
                     <FileDown size={13} />
-                    应用最新结果到选中元素
+                    {t('pptx.ai.applyToSelection')}
                   </button>
                 )}
               </div>
@@ -392,14 +394,14 @@ export function AIChatPanel() {
               {/* 选中元素快捷操作 */}
               {selectedIsText() && (
                 <div className="flex shrink-0 flex-wrap gap-1 border-t border-gray-100 px-2 pt-2">
-                  {BUILTIN_TEMPLATES.filter((t) => t.id !== 'tpl-outline').map((t) => (
+                  {BUILTIN_TEMPLATES.filter((tpl) => tpl.id !== 'tpl-outline').map((tpl) => (
                     <button
-                      key={t.id}
+                      key={tpl.id}
                       className="rounded-full border border-gray-200 px-2 py-0.5 text-[11px] text-gray-500 hover:border-[#d14424] hover:text-[#d14424] disabled:opacity-50"
                       disabled={busy}
-                      onClick={() => void runTemplateOnSelection(t.id)}
+                      onClick={() => void runTemplateOnSelection(tpl.id)}
                     >
-                      {t.name}
+                      {tpl.name}
                     </button>
                   ))}
                 </div>
@@ -417,14 +419,14 @@ export function AIChatPanel() {
                     }
                   }}
                   rows={2}
-                  placeholder="输入消息，Enter 发送"
+                  placeholder={t('pptx.ai.inputPlaceholder')}
                   className="flex-1 resize-none rounded-md border border-gray-200 px-2 py-1.5 text-xs focus:border-[#d14424] focus:outline-none"
                   data-testid="ai-input"
                 />
                 {busy
                   ? (
                       <button className="rounded-md bg-gray-200 px-3 py-2 text-xs text-gray-600" onClick={() => abortRef.current?.abort()}>
-                        停止
+                        {t('pptx.ai.stop')}
                       </button>
                     )
                   : (
@@ -433,7 +435,7 @@ export function AIChatPanel() {
                         disabled={!input.trim()}
                         onClick={() => input.trim() && void doSend(input.trim())}
                       >
-                        发送
+                        {t('pptx.ai.send')}
                       </button>
                     )}
               </div>

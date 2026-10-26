@@ -1,5 +1,6 @@
 // 编辑画布：自适应缩放 + 选择/拖拽/缩放/旋转/框选/吸附
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useI18n } from '@eflink-tech/office-kit'
 import { useEditorStore } from '../../store/editorStore'
 import { useUIStore } from '../../store/uiStore'
 import type { LineElement } from '../../types/slides'
@@ -34,6 +35,7 @@ function toCanvasPoint(e: MouseEvent | React.MouseEvent, rect: DOMRect, scale: n
 }
 
 export function EditableCanvas() {
+  const { t } = useI18n()
   const containerRef = useRef<HTMLDivElement>(null)
   const slideWrapRef = useRef<HTMLDivElement>(null)
   const interactionRef = useRef<Interaction>(null)
@@ -620,7 +622,7 @@ export function EditableCanvas() {
                   className="pointer-events-auto absolute left-1/2 z-20 flex h-5 w-5 cursor-grab items-center justify-center"
                   style={{ top: -34, marginLeft: -10 }}
                   onMouseDown={startRotate}
-                  title="旋转"
+                  title={t('pptx.canvas.rotate')}
                 >
                   <div className="size-4 rounded-full border border-[#d14424] bg-white" />
                 </div>
@@ -645,7 +647,7 @@ export function EditableCanvas() {
                   key={`lep-${ep}`}
                   className={`absolute z-20 size-3 cursor-crosshair rounded-full border-2 bg-white ${attach ? 'border-[#22c55e]' : 'border-[#d14424]'}`}
                   style={{ left: pt[0] - 6, top: pt[1] - 6 }}
-                  title={attach ? '已连接图形（拖拽可改挂点）' : '拖拽端点连接图形'}
+                  title={attach ? t('pptx.canvas.attachConnected') : t('pptx.canvas.attachHint')}
                   onMouseDown={(e) => startLineEndpointDrag(e, lineEl, ep)}
                 />
               ))}
@@ -656,7 +658,7 @@ export function EditableCanvas() {
                     key={`lp-${i}`}
                     className="absolute z-10 size-2.5 cursor-move rounded-full border border-[#d14424] bg-white"
                     style={{ left: wp[0] - 5, top: wp[1] - 5 }}
-                    title="拖拽调整控制点"
+                    title={t('pptx.canvas.dragHandle')}
                     onMouseDown={(e) => startLinePointDrag(e, lineEl, i)}
                   />
                 )

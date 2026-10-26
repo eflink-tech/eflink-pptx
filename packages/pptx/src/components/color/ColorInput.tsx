@@ -3,6 +3,7 @@
 // 自动检测视口边界，防止被裁剪
 import { createPortal } from 'react-dom'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useI18n } from '@eflink-tech/office-kit'
 import { ColorPicker } from './ColorPicker'
 
 export interface ColorInputProps {
@@ -31,6 +32,7 @@ export function ColorInput({
   recentStorageKey = DEFAULT_RECENT_KEY,
   defaultColor,
 }: ColorInputProps) {
+  const { t } = useI18n()
   const [open, setOpen] = useState(false)
   const btnRef = useRef<HTMLButtonElement>(null)
   const popoverRef = useRef<HTMLDivElement>(null)
@@ -103,7 +105,7 @@ export function ColorInput({
       <button
         ref={btnRef}
         type="button"
-        title={value || '选择颜色'}
+        title={value || t('pptx.color.choose')}
         onClick={() => setOpen((v) => !v)}
         className={`${small ? 'size-5' : 'size-6'} shrink-0 cursor-pointer rounded border border-gray-200 p-0.5`}
         style={{ backgroundColor: display.slice(0, 7) }}
@@ -113,7 +115,7 @@ export function ColorInput({
           type="button"
           className="rounded px-1 text-xs text-gray-400 hover:bg-gray-100"
           onClick={() => onChange('#00000000')}
-          title="清除"
+          title={t('pptx.color.clear')}
         >
           ✕
         </button>

@@ -1,46 +1,69 @@
-// 面板下拉选项常量
+// 面板下拉选项常量（标签按当前界面语言解析）
 import type { TransitionPreset } from '../../types/slides'
 import { CHART_GROUPS } from '../../core/chart/chartOptions'
 
-/** 图表类型下拉（按组分组的 optgroup 选项） */
-export const chartTypeGroups = CHART_GROUPS
+type Translate = (key: string) => string
 
-export const transitionPresets: Array<{ value: TransitionPreset; label: string }> = [
-  { value: 'none', label: '无' },
-  { value: 'fade', label: '淡入淡出' },
-  { value: 'slideLeft', label: '向左滑入' },
-  { value: 'slideRight', label: '向右滑入' },
-  { value: 'slideUp', label: '向上滑入' },
-  { value: 'slideDown', label: '向下滑入' },
-  { value: 'wipeLeft', label: '向左擦除' },
-  { value: 'wipeRight', label: '向右擦除' },
-  { value: 'zoomIn', label: '缩放进入' },
-  { value: 'zoomOut', label: '缩放退出' },
-  { value: 'blinds', label: '百叶窗' },
-  { value: 'flip', label: '翻转' },
+const CHART_GROUP_KEYS = ['bar', 'line', 'pie', 'barHorizontal', 'area', 'scatter', 'radar'] as const
+
+const camelCase = (id: string) => id.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase())
+
+/** 图表类型下拉（按组分组的 optgroup 选项） */
+export function chartTypeGroups(t: Translate) {
+  return CHART_GROUPS.map((group, index) => ({
+    group: t(`pptx.chart.group.${CHART_GROUP_KEYS[index] ?? 'bar'}`),
+    types: group.types.map((type) => ({ id: type.id, label: t(`pptx.chart.type.${camelCase(type.id)}`) })),
+  }))
+}
+
+const TRANSITIONS: Array<{ value: TransitionPreset; key: string }> = [
+  { value: 'none', key: 'pptx.transition.none' },
+  { value: 'fade', key: 'pptx.transition.fade' },
+  { value: 'slideLeft', key: 'pptx.transition.slideLeft' },
+  { value: 'slideRight', key: 'pptx.transition.slideRight' },
+  { value: 'slideUp', key: 'pptx.transition.slideUp' },
+  { value: 'slideDown', key: 'pptx.transition.slideDown' },
+  { value: 'wipeLeft', key: 'pptx.transition.wipeLeft' },
+  { value: 'wipeRight', key: 'pptx.transition.wipeRight' },
+  { value: 'zoomIn', key: 'pptx.transition.zoomIn' },
+  { value: 'zoomOut', key: 'pptx.transition.zoomOut' },
+  { value: 'blinds', key: 'pptx.transition.blinds' },
+  { value: 'flip', key: 'pptx.transition.flip' },
 ]
 
-export const effectOptions: Record<'in' | 'emphasis' | 'out', Array<{ value: string; label: string }>> = {
+export function transitionPresets(t: Translate): Array<{ value: TransitionPreset; label: string }> {
+  return TRANSITIONS.map((item) => ({ value: item.value, label: t(item.key) }))
+}
+
+const EFFECTS: Record<'in' | 'emphasis' | 'out', Array<{ value: string; key: string }>> = {
   in: [
-    { value: 'fade', label: '淡入' },
-    { value: 'flyInLeft', label: '自左侧飞入' },
-    { value: 'flyInRight', label: '自右侧飞入' },
-    { value: 'flyInTop', label: '自顶部飞入' },
-    { value: 'flyInBottom', label: '自底部飞入' },
-    { value: 'zoomIn', label: '缩放进入' },
-    { value: 'wipeRight', label: '向右擦除' },
-    { value: 'bounceIn', label: '弹跳进入' },
+    { value: 'fade', key: 'pptx.effect.fade' },
+    { value: 'flyInLeft', key: 'pptx.effect.flyInLeft' },
+    { value: 'flyInRight', key: 'pptx.effect.flyInRight' },
+    { value: 'flyInTop', key: 'pptx.effect.flyInTop' },
+    { value: 'flyInBottom', key: 'pptx.effect.flyInBottom' },
+    { value: 'zoomIn', key: 'pptx.effect.zoomIn' },
+    { value: 'wipeRight', key: 'pptx.effect.wipeRight' },
+    { value: 'bounceIn', key: 'pptx.effect.bounceIn' },
   ],
   emphasis: [
-    { value: 'pulse', label: '脉冲' },
-    { value: 'shake', label: '摇晃' },
-    { value: 'spin', label: '旋转' },
-    { value: 'grow', label: '放大' },
+    { value: 'pulse', key: 'pptx.effect.pulse' },
+    { value: 'shake', key: 'pptx.effect.shake' },
+    { value: 'spin', key: 'pptx.effect.spin' },
+    { value: 'grow', key: 'pptx.effect.grow' },
   ],
   out: [
-    { value: 'fade', label: '淡出' },
-    { value: 'flyOutRight', label: '向右飞出' },
-    { value: 'flyOutLeft', label: '向左飞出' },
-    { value: 'zoomOut', label: '缩小退出' },
+    { value: 'fade', key: 'pptx.effect.fadeOut' },
+    { value: 'flyOutRight', key: 'pptx.effect.flyOutRight' },
+    { value: 'flyOutLeft', key: 'pptx.effect.flyOutLeft' },
+    { value: 'zoomOut', key: 'pptx.effect.zoomOut' },
   ],
+}
+
+export function animEffectOptions(t: Translate): Record<'in' | 'emphasis' | 'out', Array<{ value: string; label: string }>> {
+  return {
+    in: EFFECTS.in.map((item) => ({ value: item.value, label: t(item.key) })),
+    emphasis: EFFECTS.emphasis.map((item) => ({ value: item.value, label: t(item.key) })),
+    out: EFFECTS.out.map((item) => ({ value: item.value, label: t(item.key) })),
+  }
 }

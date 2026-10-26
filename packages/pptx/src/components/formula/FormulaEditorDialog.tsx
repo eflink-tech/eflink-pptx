@@ -1,5 +1,6 @@
 // 公式编辑器弹窗：650×550 弹窗，内嵌 MathLive 编辑器
 import { useState } from 'react'
+import { useI18n } from '@eflink-tech/office-kit'
 import { MathFieldEditor } from './MathFieldEditor'
 
 interface FormulaEditorDialogProps {
@@ -24,13 +25,14 @@ function cleanLatex(latex: string): string {
 
 export function FormulaEditorDialog({ value, onConfirm, onClose }: FormulaEditorDialogProps) {
   const [latex, setLatex] = useState(value)
+  const { t } = useI18n()
 
   return (
     <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/40" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
       <div className="modal-pop flex flex-col overflow-hidden rounded-xl bg-white shadow-2xl" style={{ width: 650, height: 550 }}>
         {/* 标题栏 */}
         <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3">
-          <span className="text-sm font-semibold text-gray-700">编辑公式</span>
+          <span className="text-sm font-semibold text-gray-700">{t('pptx.formula.editTitle')}</span>
           <button className="rounded p-1 text-gray-400 hover:bg-gray-100" onClick={onClose}>✕</button>
         </div>
 
@@ -46,10 +48,10 @@ export function FormulaEditorDialog({ value, onConfirm, onClose }: FormulaEditor
         {/* 底部按钮 */}
         <div className="flex items-center justify-end gap-2 border-t border-gray-100 px-5 py-3">
           <button className="rounded border border-gray-200 px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-50" onClick={onClose}>
-            取消
+            {t('pptx.formula.cancel')}
           </button>
           <button className="rounded bg-[#d14424] px-4 py-1.5 text-sm text-white hover:bg-[#b93a1d]" onClick={() => onConfirm(cleanLatex(latex))}>
-            确认
+            {t('pptx.formula.confirm')}
           </button>
         </div>
       </div>

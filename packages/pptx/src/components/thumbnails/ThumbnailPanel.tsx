@@ -1,5 +1,6 @@
 // 左侧幻灯片缩略图面板：选择/排序/右键菜单
 import { useState } from 'react'
+import { useI18n } from '@eflink-tech/office-kit'
 import { useEditorStore } from '../../store/editorStore'
 import { SlideRenderer } from '../canvas/SlideRenderer'
 
@@ -8,6 +9,7 @@ import { SlideRenderer } from '../canvas/SlideRenderer'
 const THUMB_WIDTH = 160
 
 export function ThumbnailPanel() {
+  const { t } = useI18n()
   const presentation = useEditorStore((s) => s.presentation)
   const slideIndex = useEditorStore((s) => s.slideIndex)
   const [menu, setMenu] = useState<{ index: number; x: number; y: number } | null>(null)
@@ -45,10 +47,10 @@ export function ThumbnailPanel() {
   return (
     <div className="flex h-full w-[224px] shrink-0 flex-col border-r border-gray-200 bg-white" data-testid="thumbnail-panel">
       <div className="flex items-center justify-between px-3 py-2">
-        <span className="text-xs text-gray-500">幻灯片 {presentation.slides.length}</span>
+        <span className="text-xs text-gray-500">{t('pptx.thumb.slides', { count: presentation.slides.length })}</span>
         <button
           className="rounded p-1 text-gray-500 hover:bg-gray-100"
-          title="新建幻灯片"
+          title={t('pptx.thumb.new')}
           data-testid="add-slide"
           onClick={() => {
             const store = useEditorStore.getState()
@@ -119,11 +121,11 @@ export function ThumbnailPanel() {
             style={{ left: menu.x, top: menu.y }}
           >
             {[
-              { label: '在此之后新建', action: () => { const s = useEditorStore.getState(); s.pushHistory(); s.addSlide(menu.index + 1) } },
-              { label: '复制本页', action: () => { const s = useEditorStore.getState(); s.pushHistory(); s.copySlide(menu.index) } },
-              { label: '上移', action: () => { if (menu.index > 0) { const s = useEditorStore.getState(); s.pushHistory(); s.moveSlide(menu.index, menu.index - 1) } } },
-              { label: '下移', action: () => { const s = useEditorStore.getState(); if (menu.index < s.presentation.slides.length - 1) { s.pushHistory(); s.moveSlide(menu.index, menu.index + 1) } } },
-              { label: '删除本页', action: () => { const s = useEditorStore.getState(); s.pushHistory(); s.deleteSlides([menu.index]) }, danger: true },
+              { label: t('pptx.thumb.insertAfter'), action: () => { const s = useEditorStore.getState(); s.pushHistory(); s.addSlide(menu.index + 1) } },
+              { label: t('pptx.thumb.duplicate'), action: () => { const s = useEditorStore.getState(); s.pushHistory(); s.copySlide(menu.index) } },
+              { label: t('pptx.thumb.moveUp'), action: () => { if (menu.index > 0) { const s = useEditorStore.getState(); s.pushHistory(); s.moveSlide(menu.index, menu.index - 1) } } },
+              { label: t('pptx.thumb.moveDown'), action: () => { const s = useEditorStore.getState(); if (menu.index < s.presentation.slides.length - 1) { s.pushHistory(); s.moveSlide(menu.index, menu.index + 1) } } },
+              { label: t('pptx.thumb.delete'), action: () => { const s = useEditorStore.getState(); s.pushHistory(); s.deleteSlides([menu.index]) }, danger: true },
             ].map((item) => (
               <button
                 key={item.label}

@@ -1,62 +1,74 @@
 // 快捷键说明
+import { useI18n } from '@eflink-tech/office-kit'
 import { Modal } from './ModalHost'
 
-const GROUPS: Array<{ title: string; items: Array<[string, string]> }> = [
+interface HotkeyGroup {
+  titleKey: string
+  items: Array<[key: string, descKey: string]>
+}
+
+const GROUPS: HotkeyGroup[] = [
   {
-    title: '通用',
+    titleKey: 'pptx.hotkey.group.general',
     items: [
-      ['Ctrl+S', '保存文档'],
-      ['Ctrl+Z / Ctrl+Shift+Z', '撤销 / 重做'],
-      ['Ctrl+C / Ctrl+X / Ctrl+V', '复制 / 剪切 / 粘贴'],
-      ['Ctrl+D', '原地复制'],
-      ['Ctrl+A', '全选元素'],
-      ['Delete / Backspace', '删除选中元素'],
-      ['Esc', '取消选择 / 关闭弹窗'],
+      ['Ctrl+S', 'pptx.hotkey.save'],
+      ['Ctrl+Z / Ctrl+Shift+Z', 'pptx.hotkey.undoRedo'],
+      ['Ctrl+C / Ctrl+X / Ctrl+V', 'pptx.hotkey.clipboard'],
+      ['Ctrl+D', 'pptx.hotkey.duplicate'],
+      ['Ctrl+A', 'pptx.hotkey.selectAll'],
+      ['Delete / Backspace', 'pptx.hotkey.delete'],
+      ['Esc', 'pptx.hotkey.esc'],
     ],
   },
   {
-    title: '编辑',
+    titleKey: 'pptx.hotkey.group.edit',
     items: [
-      ['方向键', '微移 1px'],
-      ['Shift + 方向键', '微移 10px'],
-      ['双击文本', '进入富文本编辑'],
-      ['Ctrl+滚轮', '缩放画布'],
-      ['Alt + 拖拽', '临时关闭吸附'],
-      ['Shift + 缩放柄', '等比缩放'],
-      ['Shift + 点击', '追加选中 / 取消'],
+      ['pptx.hotkey.key.arrows', 'pptx.hotkey.nudge1'],
+      ['Shift + pptx.hotkey.key.arrows', 'pptx.hotkey.nudge10'],
+      ['pptx.hotkey.key.doubleClickText', 'pptx.hotkey.editText'],
+      ['pptx.hotkey.key.ctrlWheel', 'pptx.hotkey.zoom'],
+      ['pptx.hotkey.key.altDrag', 'pptx.hotkey.snap'],
+      ['pptx.hotkey.key.shiftGrab', 'pptx.hotkey.ratio'],
+      ['pptx.hotkey.key.shiftClick', 'pptx.hotkey.addSelect'],
     ],
   },
   {
-    title: '对齐 / 组合',
+    titleKey: 'pptx.hotkey.group.align',
     items: [
-      ['Ctrl+G', '组合 / 取消组合'],
-      ['Ctrl+L / Ctrl+R', '左对齐 / 右对齐'],
-      ['Ctrl+T / Ctrl+B', '顶对齐 / 底对齐'],
+      ['Ctrl+G', 'pptx.hotkey.groupAction'],
+      ['Ctrl+L / Ctrl+R', 'pptx.hotkey.alignLR'],
+      ['Ctrl+T / Ctrl+B', 'pptx.hotkey.alignTB'],
     ],
   },
   {
-    title: '页面与放映',
+    titleKey: 'pptx.hotkey.group.pages',
     items: [
-      ['PageUp / PageDown', '上一页 / 下一页'],
-      ['放映中：← → / 空格', '翻页'],
-      ['放映中：B / W', '黑屏 / 白屏'],
-      ['放映中：Esc', '退出放映'],
-      ['放映中：右键', '上一页'],
+      ['PageUp / PageDown', 'pptx.hotkey.prevNext'],
+      ['pptx.hotkey.key.playArrows', 'pptx.hotkey.playNav'],
+      ['pptx.hotkey.key.playBW', 'pptx.hotkey.playBW'],
+      ['pptx.hotkey.key.playEsc', 'pptx.hotkey.playExit'],
+      ['pptx.hotkey.key.playRightClick', 'pptx.hotkey.playPrev'],
     ],
   },
 ]
 
+/** 快捷键列里也可能带文案 key（如「方向键」），用前缀区分 */
+function renderKey(key: string, t: (key: string) => string): string {
+  return key.startsWith('pptx.') ? t(key) : key
+}
+
 export function HotkeyDialog() {
+  const { t } = useI18n()
   return (
-    <Modal title="快捷键" width={600}>
+    <Modal title={t('pptx.hotkey.title')} width={600}>
       <div className="grid grid-cols-2 gap-x-6 gap-y-4">
         {GROUPS.map((g) => (
-          <div key={g.title}>
-            <div className="mb-1.5 text-xs font-semibold text-gray-700">{g.title}</div>
-            {g.items.map(([key, desc]) => (
+          <div key={g.titleKey}>
+            <div className="mb-1.5 text-xs font-semibold text-gray-700">{t(g.titleKey)}</div>
+            {g.items.map(([key, descKey]) => (
               <div key={key} className="flex items-center justify-between border-b border-gray-50 py-1 text-xs">
-                <span className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[11px] text-gray-600">{key}</span>
-                <span className="text-gray-500">{desc}</span>
+                <span className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[11px] text-gray-600">{renderKey(key, t)}</span>
+                <span className="text-gray-500">{t(descKey)}</span>
               </div>
             ))}
           </div>

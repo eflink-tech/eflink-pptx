@@ -1,5 +1,6 @@
 // 画布右键菜单：元素操作 / 空白操作
 import { useEffect, useRef } from 'react'
+import { useI18n } from '@eflink-tech/office-kit'
 import { useEditorStore } from '../../store/editorStore'
 
 export interface ContextMenuState {
@@ -10,6 +11,7 @@ export interface ContextMenuState {
 }
 
 export function CanvasContextMenu({ menu, onClose }: { menu: ContextMenuState; onClose: () => void }) {
+  const { t } = useI18n()
   const store = useEditorStore.getState()
   const slide = store.presentation.slides[store.slideIndex]
   const el = menu.elementId ? slide?.elements.find((e) => e.id === menu.elementId) : null
@@ -38,31 +40,31 @@ export function CanvasContextMenu({ menu, onClose }: { menu: ContextMenuState; o
 
   if (el) {
     items.push(
-      { label: '复制', action: run(() => { store.setSelected(selectedIds); useEditorStore.getState().copySelection() }) },
-      { label: '原地复制', action: run(() => { store.setSelected(selectedIds); useEditorStore.getState().duplicateElements(selectedIds) }) },
-      { label: '删除', danger: true, action: run(() => { store.setSelected(selectedIds); store.pushHistory(); useEditorStore.getState().removeElements(selectedIds) }) },
+      { label: t('pptx.ctx.copy'), action: run(() => { store.setSelected(selectedIds); useEditorStore.getState().copySelection() }) },
+      { label: t('pptx.ctx.duplicate'), action: run(() => { store.setSelected(selectedIds); useEditorStore.getState().duplicateElements(selectedIds) }) },
+      { label: t('pptx.arrange.delete'), danger: true, action: run(() => { store.setSelected(selectedIds); store.pushHistory(); useEditorStore.getState().removeElements(selectedIds) }) },
     )
     items.push({ label: 'sep1', action: () => undefined })
     items.push(
-      { label: '置顶', action: run(() => { store.pushHistory(); store.setElementLevel(selectedIds, 'top') }) },
-      { label: '上移一层', action: run(() => { store.pushHistory(); store.setElementLevel(selectedIds, 'up') }) },
-      { label: '下移一层', action: run(() => { store.pushHistory(); store.setElementLevel(selectedIds, 'down') }) },
-      { label: '置底', action: run(() => { store.pushHistory(); store.setElementLevel(selectedIds, 'bottom') }) },
+      { label: t('pptx.arrange.toFront'), action: run(() => { store.pushHistory(); store.setElementLevel(selectedIds, 'top') }) },
+      { label: t('pptx.arrange.moveUp'), action: run(() => { store.pushHistory(); store.setElementLevel(selectedIds, 'up') }) },
+      { label: t('pptx.arrange.moveDown'), action: run(() => { store.pushHistory(); store.setElementLevel(selectedIds, 'down') }) },
+      { label: t('pptx.arrange.toBack'), action: run(() => { store.pushHistory(); store.setElementLevel(selectedIds, 'bottom') }) },
     )
     items.push({ label: 'sep2', action: () => undefined })
     items.push(
-      { label: el.lock ? '解除锁定' : '锁定', action: run(() => { store.pushHistory(); store.updateElements(selectedIds, (d) => { d.lock = !d.lock }) }) },
-      { label: '编辑文本', disabled: el.type !== 'text' && el.type !== 'shape', action: run(() => store.setEditingId(el.id)) },
+      { label: el.lock ? t('pptx.ctx.unlock') : t('pptx.ctx.lock'), action: run(() => { store.pushHistory(); store.updateElements(selectedIds, (d) => { d.lock = !d.lock }) }) },
+      { label: t('pptx.ctx.editText'), disabled: el.type !== 'text' && el.type !== 'shape', action: run(() => store.setEditingId(el.id)) },
     )
     // 已分组的元素显示「取消组合」；未分组的多选才显示「组合」
-    if (el.groupId) items.push({ label: '取消组合', action: run(() => { store.pushHistory(); store.setGroup(selectedIds, undefined) }) })
-    else if (selectedIds.length > 1) items.push({ label: '组合', action: run(() => { store.pushHistory(); store.setGroup(selectedIds, `g-${Date.now().toString(36)}`) }) })
+    if (el.groupId) items.push({ label: t('pptx.arrange.ungroup'), action: run(() => { store.pushHistory(); store.setGroup(selectedIds, undefined) }) })
+    else if (selectedIds.length > 1) items.push({ label: t('pptx.arrange.group'), action: run(() => { store.pushHistory(); store.setGroup(selectedIds, `g-${Date.now().toString(36)}`) }) })
   } else {
     items.push(
-      { label: '粘贴', disabled: !store.clipboard, action: run(() => { store.pushHistory(); store.pasteClipboard() }) },
-      { label: '全选', disabled: !slide?.elements.length, action: run(() => store.selectAll()) },
+      { label: t('pptx.ctx.paste'), disabled: !store.clipboard, action: run(() => { store.pushHistory(); store.pasteClipboard() }) },
+      { label: t('pptx.ctx.selectAll'), disabled: !slide?.elements.length, action: run(() => store.selectAll()) },
       { label: 'sep3', action: () => undefined },
-      { label: '新建幻灯片', action: run(() => { store.pushHistory(); store.addSlide(store.slideIndex + 1) }) },
+      { label: t('pptx.thumb.new'), action: run(() => { store.pushHistory(); store.addSlide(store.slideIndex + 1) }) },
     )
   }
 

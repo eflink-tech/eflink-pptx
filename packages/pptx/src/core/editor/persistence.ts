@@ -80,14 +80,14 @@ export function writeMirror(docId: string | undefined, name: string, presentatio
  *   严禁用旧镜像覆盖远端已保存内容（幽灵修改防护）。
  * - 本地模式（无后端）：优先镜像（最近状态），否则 Dexie 该文档，否则新建。
  */
-export async function loadStartupDoc(bootDocId?: string): Promise<LoadedDoc> {
+export async function loadStartupDoc(bootDocId?: string, untitledName = '未命名演示文稿'): Promise<LoadedDoc> {
   // 指定启动文档（如分享查看页的只读快照）：加载失败不回退访客本地 last-doc，避免串文档
   if (bootDocId) {
     try {
       const rec = await dbGet(bootDocId)
       if (rec) return { id: rec.id, name: rec.name, presentation: rec.presentation }
     } catch { /* 忽略，走新建兜底 */ }
-    return { id: genId('doc-'), name: '未命名演示文稿', presentation: createPresentation(genId('slide-')) }
+    return { id: genId('doc-'), name: untitledName, presentation: createPresentation(genId('slide-')) }
   }
 
   // 登录态（自定义后端）：远端优先，镜像仅作草稿兜底
@@ -112,7 +112,7 @@ export async function loadStartupDoc(bootDocId?: string): Promise<LoadedDoc> {
         if (parsed?.presentation?.slides?.length && parsed.id && parsed.id === lastId) return parsed
       }
     } catch { /* 忽略坏数据 */ }
-    return { id: genId('doc-'), name: '未命名演示文稿', presentation: createPresentation(genId('slide-')) }
+    return { id: genId('doc-'), name: untitledName, presentation: createPresentation(genId('slide-')) }
   }
 
   // 本地模式：优先镜像（最近状态），否则 Dexie 该文档，否则新建
@@ -151,7 +151,7 @@ export async function loadStartupDoc(bootDocId?: string): Promise<LoadedDoc> {
     }
   } catch { /* Dexie 不可用（隐私模式等） */ }
 
-  return { id: genId('doc-'), name: '未命名演示文稿', presentation: createPresentation(genId('slide-')) }
+  return { id: genId('doc-'), name: untitledName, presentation: createPresentation(genId('slide-')) }
 }
 
 /** 云端保存入口（不存在则创建），并同步镜像。仅由手动保存触发（⌘S/Ctrl+S、保存按钮、分享前、window bridge） */

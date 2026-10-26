@@ -1,5 +1,6 @@
 // 放映模式：全屏放映 + 演讲者视图
 import { useCallback, useEffect, useState } from 'react'
+import { useI18n } from '@eflink-tech/office-kit'
 import { useEditorStore } from '../../store/editorStore'
 import { useUIStore } from '../../store/uiStore'
 import { SlideRenderer } from '../canvas/SlideRenderer'
@@ -30,6 +31,7 @@ function animStyle(slide: Slide): Record<string, React.CSSProperties> {
 }
 
 function FullscreenPlayer() {
+  const { t } = useI18n()
   const presentation = useEditorStore((s) => s.presentation)
   const [index, setIndex] = useState(() => useUIStore.getState().playerStartIndex)
   const [scale, setScale] = useState(1)
@@ -147,7 +149,7 @@ function FullscreenPlayer() {
             </div>
           )}
       <div className="absolute bottom-3 right-4 text-xs text-white/50">
-        {index + 1} / {presentation.slides.length} · 点击/空格下一页 · 左键返回 · Esc 退出
+        {index + 1} / {presentation.slides.length} · {t('pptx.player.hint')}
       </div>
     </div>
   )
@@ -161,6 +163,7 @@ function cssText(style: React.CSSProperties): string {
 
 /** 演讲者视图 */
 function PresenterView() {
+  const { t } = useI18n()
   const presentation = useEditorStore((s) => s.presentation)
   const [index, setIndex] = useState(() => useUIStore.getState().playerStartIndex)
   const [elapsed, setElapsed] = useState(0)
@@ -206,9 +209,9 @@ function PresenterView() {
   return (
     <div className="fixed inset-0 z-[200] flex flex-col bg-[#1e1e22] p-4" data-testid="presenter">
       <div className="mb-2 flex items-center justify-between text-xs text-gray-400">
-        <span>演讲者视图 · {index + 1} / {presentation.slides.length}</span>
+        <span>{t('pptx.player.presenter', { index: index + 1, total: presentation.slides.length })}</span>
         <span className="font-mono text-base text-white" data-testid="presenter-timer">{mm}:{ss}</span>
-        <button className="rounded bg-white/10 px-3 py-1 hover:bg-white/20" onClick={() => useUIStore.getState().setPlayerMode('off')}>退出</button>
+        <button className="rounded bg-white/10 px-3 py-1 hover:bg-white/20" onClick={() => useUIStore.getState().setPlayerMode('off')}>{t('pptx.player.exit')}</button>
       </div>
       <div className="flex min-h-0 flex-1 gap-3">
         <div className="flex flex-1 items-center justify-center overflow-hidden rounded-lg bg-black">
@@ -223,7 +226,7 @@ function PresenterView() {
         </div>
         <div className="flex w-[280px] shrink-0 flex-col gap-3">
           <div className="flex-1 overflow-y-auto rounded-lg bg-white/5 p-3 text-sm leading-relaxed text-gray-200" data-testid="presenter-notes">
-            {slide.note || '（本页无备注）'}
+            {slide.note || t('pptx.player.noNotes')}
           </div>
           <div className="h-[130px] overflow-hidden rounded-lg bg-white/10">
             {nextSlide
@@ -234,7 +237,7 @@ function PresenterView() {
                     </div>
                   </div>
                 )
-              : <div className="flex h-full items-center justify-center text-xs text-gray-500">已经是最后一页</div>}
+              : <div className="flex h-full items-center justify-center text-xs text-gray-500">{t('pptx.player.lastSlide')}</div>}
           </div>
         </div>
       </div>
