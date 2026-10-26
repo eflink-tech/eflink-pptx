@@ -1,9 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPresentation } from '../../types/slides'
-import { loadStartupDoc, setPptxStorageBackend, writeMirror } from './persistence'
-
-const LAST_DOC_KEY = 'eflink-pptx-last-doc'
-const MIRROR_KEY = 'eflink-pptx-mirror'
+import { loadStartupDoc, setPptxStorageBackend, writeMirror, LAST_DOC_KEY, MIRROR_KEY } from './persistence'
 
 /** 登录态（自定义后端）存储桩：get 桩可按用例改写 */
 const backendGet = vi.fn()

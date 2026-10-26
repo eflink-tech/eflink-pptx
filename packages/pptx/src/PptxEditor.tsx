@@ -6,12 +6,12 @@
 import { useEffect, useState, type JSX } from 'react'
 import { I18nProvider, useI18n, type OfficeLocale } from '@eflink-tech/office-kit'
 import { AppLayout } from './components/layout/AppLayout'
-import { loadStartupDoc, saveDoc, writeMirror } from './core/editor/persistence'
+import { loadStartupDoc, saveDoc, writeMirror, MIRROR_KEY } from './core/editor/persistence'
 import { useEditorStore } from './store/editorStore'
 import { PPTX_MESSAGES } from './i18n/messages'
 
 /** window bridge 契约：宿主/自动化查询脏状态、手动触发云端保存、丢弃本地草稿 */
-interface EflinkEditorBridge {
+interface DocuLumaEditorBridge {
   isDirty: () => boolean
   save: () => Promise<void>
   discard: () => void
@@ -81,7 +81,7 @@ function PptxEditorInner({ bootDocId }: { bootDocId?: string }): JSX.Element {
   // window bridge：挂载后注册，卸载删除（save 为云端保存入口，成功后 dirty=false）
   useEffect(() => {
     if (!ready) return
-    const bridge: EflinkEditorBridge = {
+    const bridge: DocuLumaEditorBridge = {
       isDirty: () => useEditorStore.getState().dirty,
       save: () => {
         const { docId, docName, presentation, markSaved } = useEditorStore.getState()
@@ -89,12 +89,12 @@ function PptxEditorInner({ bootDocId }: { bootDocId?: string }): JSX.Element {
         return saveDoc(docId, docName, presentation).then(markSaved)
       },
       discard: () => {
-        try { localStorage.removeItem('eflink-pptx-mirror') } catch { /* 忽略 */ }
+        try { localStorage.removeItem(MIRROR_KEY) } catch { /* 忽略 */ }
       },
     }
-    ;(window as unknown as Record<string, unknown>).__eflinkEditorBridge = bridge
+    ;(window as unknown as Record<string, unknown>).__doculumaEditorBridge = bridge
     return () => {
-      delete (window as unknown as Record<string, unknown>).__eflinkEditorBridge
+      delete (window as unknown as Record<string, unknown>).__doculumaEditorBridge
     }
   }, [ready])
 

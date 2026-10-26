@@ -7,7 +7,7 @@ function canvas(page: Page) {
 
 test('编辑器核心流程', async ({ page }) => {
   await page.goto('/')
-  await expect(page).toHaveTitle(/易飞演示文稿/)
+  await expect(page).toHaveTitle(/DocuLuma Slides/)
 
   // 顶栏与画布就绪
   await expect(page.getByTestId('topbar')).toBeVisible()

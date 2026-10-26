@@ -1,6 +1,11 @@
 /** @eflink-tech/pptx 对外导出面：编辑器组件 + store + 持久化辅助 + 数据模型 */
 import '@eflink-tech/office-kit/styles.css'
 import './styles.css'
+import { migrateLegacyLocalStorage } from './storage/legacy'
+
+// 品牌迁移（efLink → DocuLuma）：模块加载即把旧命名空间的 localStorage 键一次性改名，
+// 早于任何编辑器挂载/读取路径；IndexedDB 旧库的导入是惰性的（见 storage/legacy.ts）。
+migrateLegacyLocalStorage()
 
 // 组件
 export { PptxEditor } from './PptxEditor'

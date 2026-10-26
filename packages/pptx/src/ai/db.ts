@@ -8,7 +8,7 @@ export class AIDb extends Dexie {
   templates!: Table<Template, string>
 
   constructor() {
-    super('eflink-pptx-ai')
+    super('doculuma-pptx-ai')
     this.version(1).stores({
       conversations: 'id, updatedAt',
       settings: 'key',

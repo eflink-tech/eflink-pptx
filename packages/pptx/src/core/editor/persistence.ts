@@ -5,6 +5,11 @@ import type { Presentation } from '../../types/slides'
 import { createPresentation } from '../../types/slides'
 import { pptxDb, type PPTDocRecord } from '../../files/db'
 import { genId } from '../utils/id'
+import { LAST_DOC_KEY, MIRROR_KEY } from '../../storage/keys'
+import { ensureLegacyImport } from '../../storage/legacy'
+
+/** localStorage 键的对外出口（宿主/测试从这里取，勿再写行内字面量） */
+export { LAST_DOC_KEY, MIRROR_KEY }
 
 /**
  * 可切换存储后端：默认 Dexie(IndexedDB)；宿主注入后所有落库走宿主实现（如后端 API）。
@@ -32,26 +37,28 @@ function hasBackend(): boolean {
 
 async function dbPut(rec: PPTDocRecord): Promise<void> {
   if (backendOverride) return backendOverride.put(rec)
+  // 先完成旧库导入再落库，否则新表被本次写入占满后旧文档再也导不进来
+  await ensureLegacyImport()
   await pptxDb.documents.put(rec)
 }
 
 async function dbGet(id: string): Promise<PPTDocRecord | undefined> {
   if (backendOverride) return backendOverride.get(id)
+  await ensureLegacyImport()
   return pptxDb.documents.get(id)
 }
 
 async function dbRemove(id: string): Promise<void> {
   if (backendOverride) return backendOverride.remove(id)
+  await ensureLegacyImport()
   await pptxDb.documents.delete(id)
 }
 
 async function dbList(): Promise<Array<Pick<PPTDocRecord, 'id' | 'name' | 'updatedAt'>>> {
   if (backendOverride) return backendOverride.list()
+  await ensureLegacyImport()
   return pptxDb.documents.orderBy('updatedAt').reverse().toArray()
 }
-
-const LAST_DOC_KEY = 'eflink-pptx-last-doc'
-const MIRROR_KEY = 'eflink-pptx-mirror'
 
 export interface LoadedDoc {
   id: string

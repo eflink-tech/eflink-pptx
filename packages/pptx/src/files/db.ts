@@ -14,7 +14,7 @@ export class PptxDb extends Dexie {
   documents!: Table<PPTDocRecord, string>
 
   constructor() {
-    super('eflink-pptx-files')
+    super('doculuma-pptx-files')
     this.version(1).stores({
       documents: 'id, updatedAt',
     })

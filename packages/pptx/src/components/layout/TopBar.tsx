@@ -20,7 +20,7 @@ import {
 import { createLineElementFromPreset, LINE_PRESETS } from '../../core/schema/linePresets'
 import { InsertMenu } from '../menus/InsertMenu'
 import { ShareDialog } from '../common/ShareDialog'
-import logoUrl from '../../assets/pptx-eflink-logo.png'
+import logoUrl from '../../assets/pptx-doculuma-logo.png'
 import type { PPTElement } from '../../types/slides'
 
 function insertCentered(factory: (x: number, y: number) => PPTElement): void {

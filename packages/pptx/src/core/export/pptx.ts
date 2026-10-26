@@ -566,9 +566,9 @@ export async function exportPPTX(
   const pptx = new PptxGenJS()
   const w = presentation.width
   const h = Math.round(presentation.width / presentation.viewportRatio)
-  pptx.defineLayout({ name: 'EFLINK', width: IN(w), height: IN(h) })
-  pptx.layout = 'EFLINK'
-  pptx.author = 'eflink-pptx'
+  pptx.defineLayout({ name: 'DOCULUMA', width: IN(w), height: IN(h) })
+  pptx.layout = 'DOCULUMA'
+  pptx.author = 'doculuma-slides'
   pptx.title = docName
   // 主题字体还原到 latin 位（ea 位由 injectThemeEaFonts 在产物 zip 中补写）
   const fonts = presentation.theme.ooxmlFonts

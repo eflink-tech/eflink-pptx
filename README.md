@@ -1,4 +1,4 @@
-# EFLink PPTX 易飞演示文稿
+# DocuLuma Slides
 
 开箱即用的在线演示文稿（PPT）编辑器。**既可以独立运行（本仓库 demo 应用），也可以作为 React 组件嵌入任意应用**（npm 包 `@eflink-tech/pptx`）。
 
@@ -102,7 +102,7 @@ eflink-pptx/
 │       ├── store/      # zustand 编辑器状态
 │       ├── files/      # 本地多文档 IndexedDB
 │       └── types/      # 数据模型（PPTElement 判别联合 / Slide / Presentation / 动画）
-├── apps/demo/          # 独立 demo 应用（易飞演示文稿）
+├── apps/demo/          # 独立 demo 应用（DocuLuma Slides）
 ├── e2e/                # Playwright 端到端测试
 └── scripts/            # CI 发布辅助脚本
 ```
@@ -119,7 +119,7 @@ git push          # 推送后机器人自动开 Version PR
 
 ## 联系我们
 
-- **在线体验**：<https://eflink.tech>（易飞演示文稿 · 免费在线 PPT 编辑器）
+- **在线体验**：<https://eflink.tech>（DocuLuma Slides · 免费在线 PPT 编辑器）
 - **问题反馈与交流**：[eflink.tech/contact](https://eflink.tech/contact)
 - **邮箱**：[support@eflink.tech](mailto:support@eflink.tech)
 

@@ -7,7 +7,7 @@ import { registerOfficeMessages, type OfficeMessagesByLocale } from '@eflink-tec
 type Row = readonly [string, string, string, string]
 
 const ROWS = {
-  'pptx.brand': ['易飞演示文稿', '易飞演示文稿', '易飞演示文稿', '易飞演示文稿'],
+  'pptx.brand': ['DocuLuma Slides', 'DocuLuma Slides', 'DocuLuma Slides', 'DocuLuma Slides'],
 
   // ── 主菜单 ─────────────────────────────────────────────
   'pptx.file.new': ['新建演示文稿', 'New presentation', 'Nueva presentación', 'Nova apresentação'],
@@ -576,6 +576,7 @@ const ROWS = {
 
   // ── AI 助手 ────────────────────────────────────────────
   'pptx.ai.title': ['AI 助手', 'AI assistant', 'Asistente de IA', 'Assistente de IA'],
+  'pptx.ai.systemPrompt': ['你是 DocuLuma Slides 的 AI 助手，回答简洁专业，用中文。', 'You are the AI assistant for DocuLuma Slides. Answer concisely and professionally in English.', 'Eres el asistente de IA de DocuLuma Slides. Responde de forma concisa y profesional en español.', 'Você é o assistente de IA do DocuLuma Slides. Responda de forma concisa e profissional em português.'],
   'pptx.ai.history': ['会话历史', 'Chat history', 'Historial de conversaciones', 'Histórico de conversas'],
   'pptx.ai.settings': ['AI 设置', 'AI settings', 'Ajustes de IA', 'Configurações de IA'],
   'pptx.ai.newChat': ['新对话', 'New chat', 'Nueva conversación', 'Nova conversa'],

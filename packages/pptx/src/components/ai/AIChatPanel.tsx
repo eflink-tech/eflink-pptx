@@ -10,6 +10,7 @@ import {
   buildDeckPrompt, parseDeck, parseOutline,
 } from '../../ai/systemPrompt'
 import { applyGeneratedDeck, applyOutline } from '../../ai/actionExecutor'
+import { ensureAiLegacyImport } from '../../storage/legacy'
 import type { AISettings, Conversation, OutlineResult } from '../../ai/types'
 import { genId } from '../../core/utils/id'
 
@@ -34,10 +35,13 @@ export function AIChatPanel() {
   const listRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    aiSettingsStore.getSettings().then((s) => {
+    // 首次读取 AI 数据前先做旧库一次性导入（ensureAiLegacyImport 内部吞掉失败，不阻塞编辑器）
+    void (async () => {
+      await ensureAiLegacyImport()
+      const s = await aiSettingsStore.getSettings()
       setSettings(s)
       setConfigured(Boolean(s.baseUrl && s.apiKey && s.model))
-    })
+    })().catch(() => { /* 读取失败则保持默认设置 */ })
   }, [])
 
   useEffect(() => {
@@ -59,7 +63,10 @@ export function AIChatPanel() {
   }, [messages, convId, t])
 
   const loadHistory = () => {
-    void aiDb.conversations.orderBy('updatedAt').reverse().toArray().then(setHistoryList)
+    void (async () => {
+      await ensureAiLegacyImport()
+      setHistoryList(await aiDb.conversations.orderBy('updatedAt').reverse().toArray())
+    })().catch(() => { /* 读取失败则保持当前列表 */ })
   }
 
   const openConversation = (conv: Conversation) => {
@@ -95,7 +102,7 @@ export function AIChatPanel() {
     abortRef.current = controller
 
     const chat: ChatMessage[] = [
-      { role: 'system', content: '你是易飞演示文稿的AI助手，回答简洁专业，用中文。' },
+      { role: 'system', content: t('pptx.ai.systemPrompt') },
       ...next.map((m) => ({ role: m.role, content: m.content }) as ChatMessage),
     ]
 
