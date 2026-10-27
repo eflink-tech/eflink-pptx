@@ -1,4 +1,6 @@
 /** @eflink-tech/pptx 对外导出面：编辑器组件 + store + 持久化辅助 + 数据模型 */
+// 顶栏/菜单栏样式来自 office-kit：宿主只引入 dist/styles.css，必须在此显式引入才会打进产物。
+// office-kit 的 JS 不在构建外部化清单里（随包打进 dist/index.js），宿主无需直接安装它。
 import '@eflink-tech/office-kit/styles.css'
 import './styles.css'
 import { migrateLegacyLocalStorage } from './storage/legacy'
@@ -9,8 +11,12 @@ migrateLegacyLocalStorage()
 
 // 组件
 export { PptxEditor } from './PptxEditor'
-export type { PptxEditorProps } from './PptxEditor'
+export type { PptxEditorProps, PptxEditorBrand } from './PptxEditor'
 export type { OfficeLocale as PptxLocale } from '@eflink-tech/office-kit'
+
+// 品牌切换：'doculuma' | 'eflink' 内置品牌，或传对象自定义
+export { builtinEditorBrand, resolveEditorBrandId, EDITOR_BRAND_IDS } from './brand'
+export type { EditorBrandId } from './brand'
 export { setPptxStorageBackend } from './core/editor/persistence'
 export { setEditorBackHref } from './core/editor/chrome'
 export type { PptxStorageBackend } from './core/editor/persistence'

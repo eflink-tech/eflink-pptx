@@ -6,7 +6,7 @@ import {
   MonitorSpeaker, Music, Palette, PanelLeft, Redo2, Save, Search, Share2,
   Shapes, Sigma, Spline, Table2, Type, Undo2, Upload, Video, Sparkles,
 } from 'lucide-react'
-import { OfficeHeader, useI18n, type OfficeMenu } from '@eflink-tech/office-kit'
+import { OfficeHeader, useI18n, type OfficeHeaderBrand, type OfficeMenu } from '@eflink-tech/office-kit'
 import { useEditorStore } from '../../store/editorStore'
 import { useUIStore, useToastStore } from '../../store/uiStore'
 import { getEditorBackHref } from '../../core/editor/chrome'
@@ -82,7 +82,7 @@ function ToolButton({ icon, label, onClick, disabled }: {
   )
 }
 
-export function TopBar() {
+export function TopBar({ branding }: { branding?: OfficeHeaderBrand | false } = {}) {
   const { t } = useI18n()
   const undoDepth = useEditorStore((s) => s.history.length)
   const redoDepth = useEditorStore((s) => s.future.length)
@@ -221,7 +221,7 @@ export function TopBar() {
   return (
     <>
       <OfficeHeader
-        brand={{ logo: logoUrl, name: t('pptx.brand') }}
+        brand={branding === false ? false : (branding ?? { logo: logoUrl, name: t('pptx.brand') })}
         backHref={backHref}
         menus={menus}
         actions={

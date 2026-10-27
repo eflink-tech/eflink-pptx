@@ -1,4 +1,5 @@
 import { expect, type Page, test } from '@playwright/test'
+import { menuClick } from './helpers'
 
 // 深度功能自测套件：插入/编辑/文本/表格/图表/页面/动画/放映/文件管理/导出全链路
 // 每个用例独立上下文（localStorage/IndexedDB 隔离），全部监听页面运行时错误
@@ -43,7 +44,7 @@ test('插入形状/线条/公式/图片/音频', async ({ page }) => {
 
   // 线条：实线直线
   await page.getByTestId('insert-line').click()
-  await page.getByTestId('line-preset-menu').locator('button[title="straight-solid"]').click()
+  await page.getByTestId('line-preset-menu').locator('button[title="实线"]').click()
   await expect(canvasEl(page)).toHaveCount(2)
 
   // 公式：直接插入默认 LaTeX
@@ -323,7 +324,7 @@ test('放映与演讲者视图', async ({ page }) => {
   await expect(page.getByTestId('player')).not.toBeVisible()
 
   // 演讲者视图
-  await page.getByTitle('演讲者视图').click()
+  await menuClick(page, '视图', '演讲者视图')
   await expect(page.getByTestId('presenter')).toBeVisible()
   await expect(page.getByTestId('presenter-notes')).toBeVisible()
   await page.keyboard.press('Escape')
@@ -332,30 +333,19 @@ test('放映与演讲者视图', async ({ page }) => {
   expectNoErrors(errors)
 })
 
-test('文档管理：新建/副本', async ({ page }) => {
+test('文件菜单：新建演示文稿', async ({ page }) => {
   const errors = watchErrors(page)
   await page.goto('/')
   await page.getByTestId('insert-text').click()
   await expect(canvasEl(page)).toHaveCount(1)
 
-  await page.getByTitle('文档管理').click()
-  await expect(page.locator('.modal-pop')).toBeVisible()
-
-  // 新建演示文稿（会自动切换并关闭弹窗）
-  await page.getByRole('button', { name: '＋ 新建演示文稿' }).click()
+  // 文件 → 新建：直接创建并切换到空文稿（旧「文档管理」弹窗与「创建副本」已随顶栏重构移除）
+  await menuClick(page, '文件', '新建演示文稿')
   await page.waitForTimeout(600)
-  await expect(page.locator('.modal-pop')).not.toBeVisible()
   await expect(canvasEl(page)).toHaveCount(0)
+  // 文档名回到未命名（底栏文档名）
+  await expect(page.getByTestId('doc-name')).toContainText(/未命名|Untitled/)
 
-  // 重新打开：文档列表应含原文档；创建副本后数量增加
-  await page.getByTitle('文档管理').click()
-  await expect(page.locator('.modal-pop')).toBeVisible()
-  const docsBefore = await page.locator('button[title="创建副本"]').count()
-  await page.getByTitle('创建副本').first().click()
-  await page.waitForTimeout(600)
-  await expect(page.locator('button[title="创建副本"]').count()).resolves.toBeGreaterThanOrEqual(docsBefore + 1)
-
-  await page.keyboard.press('Escape')
   expectNoErrors(errors)
 })
 
@@ -364,7 +354,7 @@ test('主题配色一键应用', async ({ page }) => {
   await page.goto('/')
   await page.getByTestId('insert-text').click()
 
-  await page.getByTitle('主题配色').click()
+  await menuClick(page, '页面', '主题配色')
   await expect(page.locator('.modal-pop')).toBeVisible()
   await page.getByRole('button', { name: '应用+换背景' }).first().click()
   await page.waitForTimeout(500)
@@ -398,7 +388,7 @@ test('图表导出降级路径：趋势线与雷达图导出为图片', async ({
   await trendToggle.click()
   await page.getByTestId('canvas-slide').click({ position: { x: 5, y: 5 } })
 
-  await page.getByTitle('导出').click()
+  await menuClick(page, '文件', '导出')
   const dl1 = page.waitForEvent('download', { timeout: 60000 })
   await page.getByTestId('export-pptx').click()
   const pptx = await dl1
@@ -408,7 +398,7 @@ test('图表导出降级路径：趋势线与雷达图导出为图片', async ({
   // 雷达图（pptxgenjs 无原生支持 → 图片导出）
   await insertChart(page, '雷达图', 2)
   await page.getByTestId('canvas-slide').click({ position: { x: 5, y: 5 } })
-  await page.getByTitle('导出').click()
+  await menuClick(page, '文件', '导出')
   const dl2 = page.waitForEvent('download', { timeout: 60000 })
   await page.getByTestId('export-pptx').click()
   const pptx2 = await dl2
@@ -423,7 +413,7 @@ test('缩略图面板开关与画布网格', async ({ page }) => {
   await page.getByTestId('thumbnail-panel').click()
   await page.getByTestId('thumbnail-panel').click()
   // 网格开关（底栏）
-  await page.getByTitle('网格').first().click()
+  await menuClick(page, '视图', '网格')
   expectNoErrors(errors)
 })
 
@@ -484,7 +474,7 @@ test('批注与演讲者备注', async ({ page }) => {
 test('快捷键帮助对话框', async ({ page }) => {
   const errors = watchErrors(page)
   await page.goto('/')
-  await page.getByTitle('快捷键').click()
+  await menuClick(page, '帮助', '查看全部快捷键')
   await expect(page.locator('.modal-pop')).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(page.locator('.modal-pop')).not.toBeVisible()

@@ -52,9 +52,16 @@ const GROUPS: HotkeyGroup[] = [
   },
 ]
 
-/** 快捷键列里也可能带文案 key（如「方向键」），用前缀区分 */
+/**
+ * 快捷键列可能整串是文案 key（pptx.hotkey.key.arrows）、纯组合键（Ctrl+Z）
+ * 或两者混合（Shift + pptx.hotkey.key.arrows）。按 ' + ' / ' / ' 分段保留分隔符，
+ * 仅翻译 pptx.* 段再原样拼回，'Ctrl+Z' 这类无空格写法不受影响。
+ */
 function renderKey(key: string, t: (key: string) => string): string {
-  return key.startsWith('pptx.') ? t(key) : key
+  return key
+    .split(/( \+ | \/ )/)
+    .map((part) => (part.startsWith('pptx.') ? t(part) : part))
+    .join('')
 }
 
 export function HotkeyDialog() {

@@ -4,6 +4,7 @@ import { useEditorStore } from '../../store/editorStore'
 import { useUIStore, useToastStore } from '../../store/uiStore'
 import { saveDoc } from './persistence'
 import { alignElements, type AlignMode } from '../utils/align'
+import { pptxT } from '../../i18n/runtime'
 
 function isTextTarget(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null
@@ -72,7 +73,7 @@ export function useGlobalHotkeys(): void {
         if (store.docId) {
           saveDoc(store.docId, store.docName, store.presentation)
             .then(store.markSaved)
-            .catch(() => useToastStore.getState().toast('保存失败，请重试', 'error'))
+            .catch(() => useToastStore.getState().toast(pptxT('pptx.toast.saveFailed'), 'error'))
         }
         return
       }

@@ -12,3 +12,9 @@ export const LEGACY_MIRROR_KEY = 'eflink-pptx-mirror'
 /** 迁移输入：旧 IndexedDB 库名（迁移后保留，不删除） */
 export const LEGACY_FILES_DB_NAME = 'eflink-pptx-files'
 export const LEGACY_AI_DB_NAME = 'eflink-pptx-ai'
+
+/** 旧库一次性导入标记（按表落键）：导入成功或确认跳过后置位，防"删光数据后旧数据复活" */
+export const FILES_IMPORT_DONE_KEY = 'doculuma:pptx:legacy-imported:documents'
+export const AI_CONVERSATIONS_IMPORT_DONE_KEY = 'doculuma:pptx:legacy-ai-imported:conversations'
+export const AI_SETTINGS_IMPORT_DONE_KEY = 'doculuma:pptx:legacy-ai-imported:settings'
+export const AI_TEMPLATES_IMPORT_DONE_KEY = 'doculuma:pptx:legacy-ai-imported:templates'

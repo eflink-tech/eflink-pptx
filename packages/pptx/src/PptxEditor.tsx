@@ -4,11 +4,19 @@
 // 保存策略：内容变化立即写 localStorage 镜像（毫秒级防崩溃，本地草稿，不清除 dirty）；
 // 云端保存仅由手动触发（⌘S/Ctrl+S、顶栏保存按钮、分享前强制保存、window bridge save）。
 import { useEffect, useState, type JSX } from 'react'
-import { I18nProvider, useI18n, type OfficeLocale } from '@eflink-tech/office-kit'
+import { I18nProvider, useI18n, type OfficeHeaderBrand, type OfficeLocale } from '@eflink-tech/office-kit'
 import { AppLayout } from './components/layout/AppLayout'
 import { loadStartupDoc, saveDoc, writeMirror, MIRROR_KEY } from './core/editor/persistence'
 import { useEditorStore } from './store/editorStore'
 import { PPTX_MESSAGES } from './i18n/messages'
+import { setPptxLocale } from './i18n/runtime'
+import { builtinEditorBrand, type EditorBrandId } from './brand'
+
+/** 品牌区配置：顶栏左上角的 logo 与产品名 */
+export interface PptxEditorBrand {
+  logo?: string;
+  name: string;
+}
 
 /** window bridge 契约：宿主/自动化查询脏状态、手动触发云端保存、丢弃本地草稿 */
 interface DocuLumaEditorBridge {
@@ -26,20 +34,34 @@ export interface PptxEditorProps {
   bootDocId?: string
   /** 界面语言，默认中文 */
   locale?: OfficeLocale
+  /**
+   * 品牌区：'doculuma' | 'eflink' 选内置品牌，传对象完全自定义，false 隐藏品牌区。
+   * 缺省 'doculuma'。
+   */
+  branding?: PptxEditorBrand | false | EditorBrandId
+}
+
+/** 品牌参数归一：字符串选内置品牌，对象原样使用，缺省 doculuma */
+function resolveBranding(branding: PptxEditorProps['branding']): OfficeHeaderBrand | false {
+  if (branding === false) return false;
+  if (branding === 'eflink' || branding === 'doculuma') return builtinEditorBrand(branding);
+  return branding ?? builtinEditorBrand('doculuma');
 }
 
 /**
  * 组件入口：渲染即获得完整编辑器（顶栏 / 缩略图 / 画布 / 样式面板 / 放映 / AI 助手）
  */
-export function PptxEditor({ locale = 'zh-CN', bootDocId }: PptxEditorProps = {}): JSX.Element {
+export function PptxEditor({ locale = 'zh-CN', bootDocId, branding }: PptxEditorProps = {}): JSX.Element {
+  // 非 React 模块（快捷键 / AI prompt）读取同一份语言
+  setPptxLocale(locale)
   return (
     <I18nProvider locale={locale} messages={PPTX_MESSAGES}>
-      <PptxEditorInner bootDocId={bootDocId} />
+      <PptxEditorInner bootDocId={bootDocId} branding={branding} />
     </I18nProvider>
   )
 }
 
-function PptxEditorInner({ bootDocId }: { bootDocId?: string }): JSX.Element {
+function PptxEditorInner({ bootDocId, branding }: Omit<PptxEditorProps, 'locale'>): JSX.Element {
   const { t } = useI18n()
   const [ready, setReady] = useState(false)
 
@@ -78,7 +100,8 @@ function PptxEditorInner({ bootDocId }: { bootDocId?: string }): JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // window bridge：挂载后注册，卸载删除（save 为云端保存入口，成功后 dirty=false）
+  // window bridge：挂载后注册，卸载删除（save 为云端保存入口，成功后 dirty=false）。
+  // __eflinkEditorBridge 是旧宿主的过渡期别名（同一对象），确认宿主全部改用新名后移除。
   useEffect(() => {
     if (!ready) return
     const bridge: DocuLumaEditorBridge = {
@@ -92,14 +115,17 @@ function PptxEditorInner({ bootDocId }: { bootDocId?: string }): JSX.Element {
         try { localStorage.removeItem(MIRROR_KEY) } catch { /* 忽略 */ }
       },
     }
-    ;(window as unknown as Record<string, unknown>).__doculumaEditorBridge = bridge
+    const bridgeRoot = window as unknown as Record<string, unknown>
+    bridgeRoot.__doculumaEditorBridge = bridge
+    bridgeRoot.__eflinkEditorBridge = bridge
     return () => {
-      delete (window as unknown as Record<string, unknown>).__doculumaEditorBridge
+      delete bridgeRoot.__doculumaEditorBridge
+      delete bridgeRoot.__eflinkEditorBridge
     }
   }, [ready])
 
   if (!ready) {
     return <div className="flex h-full items-center justify-center text-sm text-slate-400">{t('shell.loading')}</div>
   }
-  return <AppLayout />
+  return <AppLayout branding={resolveBranding(branding)} />
 }

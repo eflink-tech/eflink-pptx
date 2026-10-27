@@ -7,7 +7,7 @@ import { useUIStore, useToastStore } from '../../store/uiStore'
 import { aiSettingsStore, aiDb, BUILTIN_TEMPLATES } from '../../ai/db'
 import { errorMessage, sendMessage, type ChatMessage } from '../../ai/aiService'
 import {
-  buildDeckPrompt, parseDeck, parseOutline,
+  buildDeckPrompt, parseDeck, parseOutline, withOutputLanguage,
 } from '../../ai/systemPrompt'
 import { applyGeneratedDeck, applyOutline } from '../../ai/actionExecutor'
 import { ensureAiLegacyImport } from '../../storage/legacy'
@@ -139,7 +139,8 @@ export function AIChatPanel() {
       const { content } = await sendMessage({
         settings: s,
         messages: [
-          { role: 'system', content: '你是专业的演示文稿策划师，只输出 JSON。' },
+          // 基准中文 prompt + 输出语言指令：非中文界面下钉住产出语言
+          { role: 'system', content: withOutputLanguage('你是专业的演示文稿策划师，只输出 JSON。') },
           { role: 'user', content: prompt },
         ],
       })
@@ -165,7 +166,7 @@ export function AIChatPanel() {
       const { content } = await sendMessage({
         settings: s,
         messages: [
-          { role: 'system', content: '你是专业的 PPT 版式设计师，只输出 JSON。' },
+          { role: 'system', content: withOutputLanguage('你是专业的 PPT 版式设计师，只输出 JSON。') },
           { role: 'user', content: prompt },
         ],
         onContentChunk: (_c, full) => {

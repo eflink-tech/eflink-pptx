@@ -1,4 +1,5 @@
 import { expect, type Page, test } from '@playwright/test'
+import { menuClick } from './helpers'
 
 // 画布内元素（排除缩略图中的同源渲染副本）
 function canvas(page: Page) {
@@ -68,7 +69,7 @@ test('刷新后自动恢复文档', async ({ page }) => {
 
 test('模板库应用', async ({ page }) => {
   await page.goto('/')
-  await page.getByTitle('模板库').click()
+  await menuClick(page, '页面', '模板库')
   await expect(page.locator('.modal-pop')).toBeVisible()
   await page.getByRole('button', { name: '应用整套' }).first().click()
   await expect(page.locator('.modal-pop')).not.toBeVisible()
@@ -81,7 +82,7 @@ test('导出 PPTX / JSON / PNG 下载', async ({ page }) => {
   await expect(canvas(page).locator('.pptx-element')).toHaveCount(1)
 
   // JSON 导出
-  await page.getByTitle('导出').click()
+  await menuClick(page, '文件', '导出')
   await expect(page.locator('.modal-pop')).toBeVisible()
   const jsonDownload = page.waitForEvent('download', { timeout: 15000 })
   await page.getByRole('button', { name: '导出 JSON' }).click()
@@ -109,7 +110,7 @@ test('查找替换', async ({ page }) => {
   await expect(canvas(page).locator('.pptx-element')).toHaveCount(1)
 
   // 打开查找替换
-  await page.getByTitle('查找替换（Ctrl+F）').click()
+  await menuClick(page, '编辑', '查找替换')
   await page.getByPlaceholder('查找内容').fill('默认')
   await page.getByRole('button', { name: '查找', exact: true }).click()
   await page.getByPlaceholder('替换为（可留空）').fill('你好')
@@ -125,7 +126,7 @@ test('PPTX 导出→导入往返', async ({ page }) => {
   await expect(canvas(page).locator('.pptx-element table')).toHaveCount(1)
 
   // 导出 PPTX
-  await page.getByTitle('导出').click()
+  await menuClick(page, '文件', '导出')
   const dl = page.waitForEvent('download', { timeout: 30000 })
   await page.getByTestId('export-pptx').click()
   const download = await dl
@@ -133,7 +134,7 @@ test('PPTX 导出→导入往返', async ({ page }) => {
 
   // 关闭导出框，导入回来
   await page.keyboard.press('Escape')
-  await page.getByTitle('导入（PPTX/JSON）').click()
+  await menuClick(page, '文件', '导入')
   await page.setInputFiles('input[type="file"]', filePath!)
   // 导入完成后画布应有表格与文本
   await expect(canvas(page).locator('.pptx-element table')).toHaveCount(1, { timeout: 15000 })

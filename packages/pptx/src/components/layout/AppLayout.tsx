@@ -1,6 +1,7 @@
 // 应用布局：顶栏 + 左缩略图 + 画布 + 右面板 + 底栏 + 模态/放映/Toast
 import { useUIStore } from '../../store/uiStore'
 import { useGlobalHotkeys } from '../../core/editor/hotkeys'
+import type { OfficeHeaderBrand } from '@eflink-tech/office-kit'
 import { TopBar } from './TopBar'
 import { BottomBar } from './BottomBar'
 import { ThumbnailPanel } from '../thumbnails/ThumbnailPanel'
@@ -11,7 +12,7 @@ import { ModalHost } from '../dialogs/ModalHost'
 import { Player } from '../player/Player'
 import { ToastHost } from '../common/ToastHost'
 
-export function AppLayout() {
+export function AppLayout({ branding }: { branding?: OfficeHeaderBrand | false } = {}) {
   useGlobalHotkeys()
   const thumbnailsVisible = useUIStore((s) => s.thumbnailsVisible)
   const aiPanelVisible = useUIStore((s) => s.aiPanelVisible)
@@ -19,7 +20,7 @@ export function AppLayout() {
 
   return (
     <div className="flex h-full flex-col bg-white">
-      <TopBar />
+      <TopBar branding={branding} />
       <div className="flex min-h-0 flex-1">
         {thumbnailsVisible && <ThumbnailPanel />}
         <div className="min-w-0 flex-1">
