@@ -111,7 +111,9 @@ export function FindReplaceDialog() {
               ))}
           </div>
         )}
-        <div className="text-[11px] text-gray-400">{t('pptx.find.summary', { count: hits.length })}</div>
+        <div className="text-[11px] text-gray-400">
+          {t(hits.length === 1 ? 'pptx.find.summaryOne' : 'pptx.find.summary', { count: hits.length })}
+        </div>
       </div>
     </Modal>
   )
