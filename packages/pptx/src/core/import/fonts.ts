@@ -2,6 +2,17 @@
 /** 字体栈生成：OOXML typeface（含 +mj/+mn 主题引用）→ CSS font-family。
  * 栈序：latin → ea → 中文系统回退（CSS 按字符逐字回退：西文命中 latin，中文落至 ea 或系统字体）。 */
 import type { PptxTheme } from './theme'
+import type { PptxPackage } from './package'
+import { firstDescendant, parseXML } from './xml'
+
+/** presentation.xml 是否声明嵌入字体（p:embeddedFontLst）；本实现只用系统字体，需向用户报告 */
+export async function hasEmbeddedFonts(pkg: PptxPackage): Promise<boolean> {
+  const xml = await pkg.text('ppt/presentation.xml')
+  if (!xml) return false
+  const root = parseXML(xml).documentElement
+  const lst = firstDescendant(root, 'p:embeddedFontLst')
+  return Boolean(lst && firstDescendant(lst, 'p:embeddedFont'))
+}
 
 /** 中文回退栈：macOS PingFang SC / Windows Microsoft YaHei，末位通用族 */
 const CN_FALLBACK = ['PingFang SC', 'Microsoft YaHei']

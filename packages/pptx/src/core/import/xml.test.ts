@@ -36,4 +36,14 @@ describe('xml helpers', () => {
     expect(() => parseXML('<root><unclosed></root>')).toThrow(/XML 解析失败/)
     expect(() => parseXML('不是 XML 的普通文本')).toThrow(/XML 解析失败/)
   })
+
+  it('非约定前缀（strict OOXML）按 localName 兜底命中', () => {
+    const alt = parseXML(
+      `<x:root xmlns:x="urn:strict" xmlns:y="urn:strict-a"><x:item><y:ln w="12700"><y:srgbClr val="00FF00"/></y:ln></x:item></x:root>`,
+    ).documentElement
+    const item = directChild(alt, 'x:item')!
+    expect(descendants(item, 'a:ln')).toHaveLength(1)
+    expect(attr(firstDescendant(item, 'a:srgbClr'), 'val')).toBe('00FF00')
+    expect(descendants(item, 'a:missing')).toEqual([])
+  })
 })

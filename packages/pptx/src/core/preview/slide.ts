@@ -2,7 +2,7 @@
  * 失败语义：slide 部件缺失返回 null、slide XML 畸形上抛（均由调用方计入 report）；layout/master 畸形按部件降级
  * （console.warn + 跳过该部件，背景单级失败继续回退下一级），背景/装饰/元素级失败均不中断整页。 */
 import { attr, firstDescendant, parseXML } from '../import/xml'
-import { collectPlaceholders, findAncestry, parseBackgroundFill } from '../import/master'
+import { collectPlaceholderShapes, collectPlaceholders, findAncestry, parseBackgroundFill } from '../import/master'
 import { DEFAULT_SCHEME, parseThemeForMaster } from '../import/theme'
 import type { PptxPackage } from '../import/package'
 import type { PptxTheme } from '../import/theme'
@@ -12,7 +12,7 @@ import { registerLinearGradient } from './shape'
 import { renderSpTreeNode } from './dispatch'
 
 /** 参与 spTree 渲染的节点类型（与一期 parseSlideAncestry 的装饰过滤口径一致） */
-const ELEMENT_NODES = ['p:sp', 'p:cxnSp', 'p:pic', 'p:graphicFrame', 'p:grpSp']
+const ELEMENT_LOCALS = ['sp', 'cxnSp', 'pic', 'graphicFrame', 'grpSp', 'AlternateContent']
 
 /** 部件 spTree 定位：p:cSld > p:spTree，cSld 缺失时容错到根下找 */
 function spTreeOf(doc: Document): Element | null {
@@ -30,7 +30,7 @@ async function appendBgPart(
   h: number,
 ): Promise<boolean> {
   const bg = firstDescendant(doc.documentElement, 'p:bg')
-  const fill = parseBackgroundFill(bg, ctx.theme)
+  const fill = parseBackgroundFill(bg, ctx.theme, ctx.report)
   if (!bg || !fill) return false
   if (fill.type === 'solid') {
     svg.appendChild(svgEl('rect', { x: 0, y: 0, width: w, height: h, fill: fill.color }))
@@ -99,8 +99,9 @@ export async function renderSlide(
     }
   }
 
-  // 占位符位置表：版式/母版合入（不覆盖），key = idx ?? type（EMU 空间，与 geomOf 回退口径一致）
+  // 占位符位置/外观表：版式/母版合入（不覆盖），key = idx ?? type（EMU 空间，与 geomOf 回退口径一致）
   const placeholders = new Map<string, { x: number; y: number; w: number; h: number }>()
+  const placeholderShapes = new Map<string, { spPr?: Element; style?: Element }>()
   let n = 0
   const makeCtx = (partPath: string): PreviewCtx => ({
     pkg,
@@ -109,6 +110,7 @@ export async function renderSlide(
     report,
     scale: { x: 1, y: 1 },
     placeholders,
+    placeholderShapes,
     defs,
     uid: (prefix: string) => `${prefix}-p${pageIdx}-${n++}`,
   })
@@ -142,9 +144,12 @@ export async function renderSlide(
     for (const [k, v] of collectPlaceholders(spTree)) {
       if (!placeholders.has(k)) placeholders.set(k, v)
     }
+    for (const [k, v] of collectPlaceholderShapes(spTree)) {
+      if (!placeholderShapes.has(k)) placeholderShapes.set(k, v)
+    }
     const partCtx = makeCtx(partPath)
     for (const child of Array.from(spTree.children)) {
-      if (!ELEMENT_NODES.includes(child.nodeName)) continue
+      if (!ELEMENT_LOCALS.includes(child.localName)) continue
       if (firstDescendant(child, 'p:ph')) continue // 占位符原型不直接渲染
       svg.append(...(await renderSpTreeNode(child, partCtx)))
     }
@@ -155,7 +160,7 @@ export async function renderSlide(
   if (slideTree) {
     const slideCtx = makeCtx(slidePath)
     for (const child of Array.from(slideTree.children)) {
-      if (!ELEMENT_NODES.includes(child.nodeName)) continue
+      if (!ELEMENT_LOCALS.includes(child.localName)) continue
       svg.append(...(await renderSpTreeNode(child, slideCtx)))
     }
   }

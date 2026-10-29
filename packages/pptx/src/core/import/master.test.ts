@@ -70,7 +70,7 @@ describe('master.ts', () => {
     const bg = el(`<p:bg xmlns:p="urn:p" xmlns:a="urn:a" xmlns:r="urn:r">
       <p:bgPr><a:blipFill><a:blip r:embed="rId9"/></a:blipFill><a:effectLst/></p:bgPr>
     </p:bg>`)
-    expect(parseBackgroundFill(bg, theme)).toEqual({ type: 'image' })
+    expect(parseBackgroundFill(bg, theme)).toEqual({ type: 'image', image: { src: '', size: 'cover' } })
   })
 
   it('parseBackgroundFill：pattFill lgGrid → SVG 平铺图背景（网格纹理）', () => {

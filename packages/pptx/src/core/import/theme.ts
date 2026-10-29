@@ -1,7 +1,15 @@
 // src/core/import/theme.ts
 /** 主题解析：clrScheme / fontScheme / 母版 clrMap */
-import { attr, firstDescendant, directChild, parseXML } from './xml'
-import type { PptxPackage } from './package'
+import { attr, firstDescendant, directChild, directChildren, parseXML } from './xml'
+import { relTypeIs, type PptxPackage } from './package'
+
+/** theme1.xml 样式矩阵：p:style 的 fillRef/lnRef/effectRef 按 idx（1 起）索引，
+ *  矩阵元素内的 phClr 由引用处的颜色替换 */
+export interface PptxStyleMatrix {
+  fills: Element[]
+  lines: Element[]
+  effects: Element[]
+}
 
 export interface PptxTheme {
   /** dk1 lt1 dk2 lt2 accent1-6 hlink folHlink → '#RRGGBB' */
@@ -13,6 +21,8 @@ export interface PptxTheme {
   minorEaFont?: string
   /** 母版 p:clrMap：bg1→lt1 等；未指定的键与 key 相同 */
   colorMap: Record<string, string>
+  /** 主题样式矩阵（fillStyleLst/lnStyleLst/effectStyleLst）；部件缺失时 undefined */
+  styles?: PptxStyleMatrix
 }
 
 export const DEFAULT_SCHEME: Record<string, string> = {
@@ -24,7 +34,6 @@ export const DEFAULT_SCHEME: Record<string, string> = {
 const CLR_MAP_KEYS = ['bg1', 'tx1', 'bg2', 'tx2', 'accent1', 'accent2', 'accent3', 'accent4', 'accent5', 'accent6', 'hlink', 'folHlink']
 
 /** OOXML theme 关系 Type URI */
-const THEME_REL_TYPE = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme'
 
 function readClrNode(clr: Element | null): string | undefined {
   if (!clr) return undefined
@@ -61,12 +70,13 @@ export async function parseThemeForMaster(pkg: PptxPackage, masterPath: string |
   let minorFont = 'Calibri'
   let majorEaFont: string | undefined
   let minorEaFont: string | undefined
+  let styles: PptxStyleMatrix | undefined
 
   if (masterPath) {
     const rels = await pkg.rels(masterPath)
     let themePath: string | null = null
     for (const rel of rels.values()) {
-      if (rel.mode !== 'External' && rel.type === THEME_REL_TYPE) {
+      if (rel.mode !== 'External' && relTypeIs(rel.type, 'theme')) {
         themePath = rel.target
         break
       }
@@ -88,11 +98,23 @@ export async function parseThemeForMaster(pkg: PptxPackage, masterPath: string |
         minorFont = fontOf(fontScheme, 'minorFont', false) ?? minorFont
         majorEaFont = fontOf(fontScheme, 'majorFont', true)
         minorEaFont = fontOf(fontScheme, 'minorFont', true)
+
+        const fillLst = firstDescendant(root, 'a:fillStyleLst')
+        const lnLst = firstDescendant(root, 'a:lnStyleLst')
+        const effectLst = firstDescendant(root, 'a:effectStyleLst')
+        styles = {
+          fills: fillLst ? Array.from(fillLst.children) : [],
+          lines: lnLst ? directChildren(lnLst, 'a:ln') : [],
+          // effectStyle 包裹一层：取内部 a:effectLst（缺失给空壳，保持 idx 对齐）
+          effects: effectLst
+            ? Array.from(effectLst.children).map((es) => directChild(es, 'a:effectLst') ?? es)
+            : [],
+        }
       }
     }
   }
 
-  return { schemeColors, majorFont, minorFont, majorEaFont, minorEaFont, colorMap }
+  return { schemeColors, majorFont, minorFont, majorEaFont, minorEaFont, colorMap, styles }
 }
 
 /** schemeClr 名称求值：先过母版 clrMap（bg1→lt1 等），再查主题色表 */

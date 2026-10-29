@@ -200,3 +200,151 @@ describe('importPPTXDetailed', () => {
     expect(presentation.slides[0].elements[0].type === 'text' && presentation.slides[0].elements[0].content).toContain('页1')
   })
 })
+
+/** 构造 strict OOXML 包：strict 关系 URI + 非常规前缀（S/D/L/M/T），含嵌入字体声明 */
+async function buildStrictPptx(): Promise<File> {
+  const PML = 'http://purl.oclc.org/ooxml/presentationml/main'
+  const DML = 'http://purl.oclc.org/ooxml/drawingml/main'
+  const REL = 'http://purl.oclc.org/ooxml/officeDocument/relationships'
+  const zip = new JSZip()
+  zip.file('[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+</Types>`)
+  zip.file('_rels/.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="${REL}/officeDocument" Target="ppt/presentation.xml"/>
+</Relationships>`)
+  zip.file('ppt/presentation.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<pre:presentation xmlns:pre="${PML}" xmlns:r="${REL}">
+  <pre:embeddedFontLst><pre:embeddedFont/></pre:embeddedFontLst>
+  <pre:sldIdLst><pre:sldId id="256" r:id="rId1"/></pre:sldIdLst>
+  <pre:sldSz cx="12192000" cy="6858000"/>
+</pre:presentation>`)
+  zip.file('ppt/_rels/presentation.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="${REL}/slide" Target="slides/slide1.xml"/>
+</Relationships>`)
+  zip.file('ppt/slides/slide1.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<S:sld xmlns:S="${PML}" xmlns:D="${DML}">
+  <S:cSld><S:spTree>
+    <S:nvGrpSpPr><S:cNvPr id="1" name=""/></S:nvGrpSpPr>
+    <S:grpSpPr/>
+    <S:sp>
+      <S:nvSpPr><S:cNvPr id="2" name="T"/></S:nvSpPr>
+      <S:spPr>
+        <D:xfrm><D:off x="914400" y="914400"/><D:ext cx="4572000" cy="914400"/></D:xfrm>
+        <D:prstGeom prst="rect"><D:avLst/></D:prstGeom>
+        <D:noFill/>
+      </S:spPr>
+      <S:txBody><D:bodyPr/><D:p><D:r><D:rPr sz="2400"><D:solidFill><D:srgbClr val="112233"/></D:solidFill></D:rPr><D:t>严格模式</D:t></D:r></D:p></S:txBody>
+    </S:sp>
+  </S:spTree></S:cSld>
+</S:sld>`)
+  zip.file('ppt/slides/_rels/slide1.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="${REL}/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>
+</Relationships>`)
+  zip.file('ppt/slideLayouts/slideLayout1.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<L:sldLayout xmlns:L="${PML}" xmlns:T="${DML}">
+  <L:cSld><L:spTree>
+    <L:nvGrpSpPr><L:cNvPr id="1" name=""/></L:nvGrpSpPr><L:grpSpPr/>
+    <L:sp>
+      <L:nvSpPr><L:cNvPr id="7" name="Decoration"/></L:nvSpPr>
+      <L:spPr>
+        <T:xfrm><T:off x="0" y="0"/><T:ext cx="914400" cy="914400"/></T:xfrm>
+        <T:prstGeom prst="rect"><T:avLst/></T:prstGeom>
+        <T:solidFill><T:srgbClr val="FFCC00"/></T:solidFill>
+      </L:spPr>
+      <L:txBody><T:bodyPr/><T:p><T:endParaRPr/></T:p></L:txBody>
+    </L:sp>
+  </L:spTree></L:cSld>
+</L:sldLayout>`)
+  zip.file('ppt/slideLayouts/_rels/slideLayout1.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="${REL}/slideMaster" Target="../slideMasters/slideMaster1.xml"/>
+</Relationships>`)
+  zip.file('ppt/slideMasters/slideMaster1.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<M:sldMaster xmlns:M="${PML}" xmlns:T="${DML}">
+  <M:cSld><M:spTree>
+    <M:nvGrpSpPr><M:cNvPr id="1" name=""/></M:nvGrpSpPr><M:grpSpPr/>
+  </M:spTree></M:cSld>
+</M:sldMaster>`)
+  zip.file('ppt/slideMasters/_rels/slideMaster1.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="${REL}/theme" Target="../theme/theme1.xml"/>
+</Relationships>`)
+  zip.file('ppt/theme/theme1.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Strict">
+  <a:themeElements>
+    <a:clrScheme name="Strict">
+      <a:dk1><a:srgbClr val="000000"/></a:dk1><a:lt1><a:srgbClr val="FFFFFF"/></a:lt1>
+      <a:dk2><a:srgbClr val="44546A"/></a:dk2><a:lt2><a:srgbClr val="E7E6E6"/></a:lt2>
+      <a:accent1><a:srgbClr val="AA00BB"/></a:accent1><a:accent2><a:srgbClr val="ED7D31"/></a:accent2>
+      <a:accent3><a:srgbClr val="A5A5A5"/></a:accent3><a:accent4><a:srgbClr val="FFC000"/></a:accent4>
+      <a:accent5><a:srgbClr val="5B9BD5"/></a:accent5><a:accent6><a:srgbClr val="70AD47"/></a:accent6>
+      <a:hlink><a:srgbClr val="0563C1"/></a:hlink><a:folHlink><a:srgbClr val="954F72"/></a:folHlink>
+    </a:clrScheme>
+    <a:fontScheme name="Strict">
+      <a:majorFont><a:latin typeface="Calibri Light"/><a:ea typeface=""/></a:majorFont>
+      <a:minorFont><a:latin typeface="Calibri"/><a:ea typeface=""/></a:minorFont>
+    </a:fontScheme>
+  </a:themeElements>
+</a:theme>`)
+  return new File([await zip.generateAsync({ type: 'blob' })], 'strict.pptx')
+}
+
+describe('strict OOXML 兼容', () => {
+  it('strict 关系 URI + 非常规前缀仍能解析内容、版式装饰与主题，并报告嵌入字体', async () => {
+    const { presentation, report } = await importPPTXDetailed(await buildStrictPptx())
+    const slide = presentation.slides[0]
+    const texts = slide.elements.filter((el) => el.type === 'text')
+    expect(texts).toHaveLength(1)
+    expect(texts[0].type === 'text' && texts[0].content).toContain('严格模式')
+    expect(texts[0].type === 'text' && texts[0].content).toContain('112233')
+    // 版式装饰（FFCC00 矩形）经 strict slideLayout 关系链导入
+    expect(slide.elements.some((el) => el.type === 'shape')).toBe(true)
+    // 母版 → 主题经 strict theme 关系解析
+    expect(presentation.theme.colors[0]).toBe('#AA00BB')
+    expect(report.skipped.embeddedFont).toBe(1)
+  })
+})
+
+describe('graphicFrame 未导入内容报告', () => {
+  it('SmartArt(diagram) 与 OLE 容器分别计入报告', async () => {
+    const zip = new JSZip()
+    zip.file('ppt/presentation.xml', `<?xml version="1.0"?>
+<p:presentation xmlns:p="urn:p" xmlns:r="urn:r">
+  <p:sldIdLst><p:sldId id="256" r:id="rId1"/></p:sldIdLst>
+  <p:sldSz cx="12192000" cy="6858000"/>
+</p:presentation>`)
+    zip.file('ppt/_rels/presentation.xml.rels', `<?xml version="1.0"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="urn:slide" Target="slides/slide1.xml"/>
+</Relationships>`)
+    zip.file('ppt/slides/slide1.xml', `<?xml version="1.0"?>
+<p:sld xmlns:p="urn:p" xmlns:a="urn:a" xmlns:r="urn:r">
+  <p:cSld><p:spTree>
+    <p:nvGrpSpPr><p:cNvPr id="1" name=""/></p:nvGrpSpPr><p:grpSpPr/>
+    <p:graphicFrame>
+      <p:xfrm><a:off x="0" y="0"/><a:ext cx="914400" cy="914400"/></p:xfrm>
+      <a:graphic><a:graphicData uri="urn:drawingml/2006/diagram"/></a:graphic>
+    </p:graphicFrame>
+    <p:graphicFrame>
+      <p:xfrm><a:off x="0" y="0"/><a:ext cx="914400" cy="914400"/></p:xfrm>
+      <a:graphic><a:graphicData uri="urn:presentationml/2006/ole"/></a:graphic>
+    </p:graphicFrame>
+  </p:spTree></p:cSld>
+</p:sld>`)
+    zip.file('ppt/slides/_rels/slide1.xml.rels', `<?xml version="1.0"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>`)
+
+    const { presentation, report } = await importPPTXDetailed(new File(
+      [await zip.generateAsync({ type: 'blob' })], 'frames.pptx',
+    ))
+    expect(presentation.slides[0].elements).toHaveLength(0)
+    expect(report.skipped.smartartUnsupported).toBe(1)
+    expect(report.skipped.oleObjectUnsupported).toBe(1)
+  })
+})

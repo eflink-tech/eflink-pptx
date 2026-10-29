@@ -2,7 +2,7 @@
  * 边框/填充/文字色来自 buildCellMatrix 合成结果（tcPr 显式 + tblPr 表格样式层叠），
  * 未声明边框的表回退细灰线。 */
 import { attr, directChildren, firstDescendant } from '../import/xml'
-import { buildCellMatrix } from '../import/elements/table'
+import { buildCellMatrix, sizesWithFallback } from '../import/elements/table'
 import { resolveTableStyle } from '../import/elements/table-style'
 import { renderText } from './text'
 import { svgEl, geomOf, boxTransform, type PreviewCtx } from './svg'
@@ -14,10 +14,10 @@ export async function renderTable(node: Element, ctx: PreviewCtx): Promise<SVGEl
   if (!tbl) return null
 
   const gridCols = directChildren(firstDescendant(node, 'a:tblGrid') ?? tbl, 'a:gridCol')
-  const colSizesRaw = gridCols.map((c) => parseInt(attr(c, 'w') ?? '0', 10))
+  const colSizesRaw = sizesWithFallback(gridCols.map((c) => parseInt(attr(c, 'w') ?? '0', 10)))
   const colTotal = colSizesRaw.reduce((a, b) => a + b, 0) || 1
   const trs = directChildren(tbl, 'a:tr')
-  const rowSizesRaw = trs.map((tr) => parseInt(attr(tr, 'h') ?? '0', 10))
+  const rowSizesRaw = sizesWithFallback(trs.map((tr) => parseInt(attr(tr, 'h') ?? '0', 10)))
   const rowTotal = rowSizesRaw.reduce((a, b) => a + b, 0) || 1
 
   // 每列/行的相对偏移（px，基于归一化比例 → 畸形 w/h=0 时按占比兜底）

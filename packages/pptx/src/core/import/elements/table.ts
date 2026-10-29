@@ -4,9 +4,10 @@ import { attr, directChild, directChildren, firstDescendant } from '../xml'
 import { resolveColor } from '../styles'
 import { fontStackOf } from '../fonts'
 import { genId } from '../../utils/id'
-import { parseFrameGeom } from './frame-geom'
+import { frameRotOf, parseFrameGeom } from './frame-geom'
 import { lstAlgnOf } from './text'
 import { partsForCell, resolveTableStyle, type ResolvedTableStyle } from './table-style'
+import { addSkipped } from '../context'
 import type { GroupXform, ParseContext } from '../context'
 import type { PptxPackage } from '../package'
 import type { PptxTheme } from '../theme'
@@ -53,19 +54,29 @@ function cellStyleOf(tc: Element, theme: PptxTheme): NonNullable<TableCell['styl
     if (anchor === 'ctr') style.valign = 'middle'
     else if (anchor === 'b') style.valign = 'bottom'
     else if (anchor === 't') style.valign = 'top'
-    // 边框：四边取首个带填充色的 ln（源文件几乎总是四边同色；noFill 边跳过）
+    // 边框：取四边中最常见的「颜色+宽度」组合；noFill 边视为无边框。
+    // 模型单元格仅支持单一边框，四边不一致时由 parseTableEl 计入报告
     const borderNames = ['a:lnL', 'a:lnT', 'a:lnR', 'a:lnB'] as const
-    let borderEmu = 0
+    const edges = new Map<string, { color: string; widthEmu: number; count: number }>()
     for (const name of borderNames) {
       const ln = directChild(tcPr, name)
-      if (!ln) continue
+      if (!ln || directChild(ln, 'a:noFill')) continue
       const color = resolveColor(directChild(ln, 'a:solidFill'), theme)
       if (!color) continue
-      style.bordercolor = color
-      borderEmu = parseInt(attr(ln, 'w') ?? '0', 10)
-      break
+      const widthEmu = parseInt(attr(ln, 'w') ?? '0', 10)
+      const key = `${color}|${widthEmu}`
+      const cur = edges.get(key)
+      if (cur) cur.count += 1
+      else edges.set(key, { color, widthEmu, count: 1 })
     }
-    if (style.bordercolor) style.borderwidth = Math.max(1, Math.round(borderEmu / 9525))
+    let best: { color: string; widthEmu: number; count: number } | null = null
+    for (const edge of edges.values()) {
+      if (!best || edge.count > best.count) best = edge
+    }
+    if (best) {
+      style.bordercolor = best.color
+      style.borderwidth = Math.max(1, Math.round(best.widthEmu / 9525))
+    }
   }
   return style
 }
@@ -150,6 +161,49 @@ export function buildCellMatrix(tbl: Element, theme: PptxTheme, tblStyle?: Resol
   return { cells, tcEls }
 }
 
+/** 行高/列宽兜底：缺失维度按已知维度均值补齐，全部缺失则等分（避免 0 比例导致渲染塌陷） */
+export function sizesWithFallback(raw: number[]): number[] {
+  const known = raw.filter((v) => v > 0)
+  const fallback = known.length ? Math.round(known.reduce((a, b) => a + b, 0) / known.length) : 1
+  return raw.map((v) => (v > 0 ? v : fallback))
+}
+
+/** 单元格富文本判定：同格内 run 样式不一致（粗细/斜体/下划线/字号/颜色/字体）时模型只能保留纯文本 */
+function hasRichRuns(tc: Element, theme: PptxTheme): boolean {
+  const txBody = firstDescendant(tc, 'a:txBody')
+  if (!txBody) return false
+  const sigs = new Set<string>()
+  for (const p of directChildren(txBody, 'a:p')) {
+    for (const node of Array.from(p.children)) {
+      if (node.localName !== 'r' && node.localName !== 'fld') continue
+      const rPr = directChild(node, 'a:rPr')
+      const runColor = rPr ? resolveColor(directChild(rPr, 'a:solidFill'), theme) : null
+      sigs.add([
+        attr(rPr, 'b') ?? '', attr(rPr, 'i') ?? '', attr(rPr, 'u') ?? '', attr(rPr, 'strike') ?? '',
+        attr(rPr, 'sz') ?? '', runColor ?? '', attr(rPr ? directChild(rPr, 'a:latin') : null, 'typeface') ?? '',
+      ].join('|'))
+      if (sigs.size > 1) return true
+    }
+  }
+  return false
+}
+
+/** 单元格四边边框声明是否不一致（noFill 视作显式无边框） */
+function hasEdgeMismatch(tc: Element, theme: PptxTheme): boolean {
+  const tcPr = directChild(tc, 'a:tcPr')
+  if (!tcPr) return false
+  const sigs: string[] = []
+  for (const name of ['a:lnL', 'a:lnT', 'a:lnR', 'a:lnB'] as const) {
+    const ln = directChild(tcPr, name)
+    if (!ln) continue
+    if (directChild(ln, 'a:noFill')) { sigs.push('none'); continue }
+    const color = resolveColor(directChild(ln, 'a:solidFill'), theme)
+    if (!color) continue
+    sigs.push(`${color}|${attr(ln, 'w') ?? '0'}`)
+  }
+  return new Set(sigs).size > 1
+}
+
 export async function parseTableEl(
   node: Element,
   ctx: ParseContext,
@@ -163,20 +217,38 @@ export async function parseTableEl(
   const tbl = firstDescendant(node, 'a:tbl')
   if (!tbl) return null
   const tblStyle = await resolveTableStyle(tbl, ctx.pkg, ctx.theme)
+  // 内置样式 GUID 已按规范基础定义还原；仅无法识别的 GUID 才计入报告
+  const tblPr = directChild(tbl, 'a:tblPr')
+  const styleId = tblPr ? directChild(tblPr, 'a:tableStyleId') : null
+  if (!tblStyle && styleId?.textContent?.trim()) addSkipped(ctx.report, 'tableStyleBuiltin')
   const gridCols = directChildren(firstDescendant(node, 'a:tblGrid') ?? tbl, 'a:gridCol')
-  const colSizesRaw = gridCols.map((c) => parseInt(attr(c, 'w') ?? '0', 10))
+  const colSizesRaw = sizesWithFallback(gridCols.map((c) => parseInt(attr(c, 'w') ?? '0', 10)))
   const colTotal = colSizesRaw.reduce((a, b) => a + b, 0) || 1
   const trs = directChildren(tbl, 'a:tr')
-  const rowSizesRaw = trs.map((tr) => parseInt(attr(tr, 'h') ?? '0', 10))
+  const rowSizesRaw = sizesWithFallback(trs.map((tr) => parseInt(attr(tr, 'h') ?? '0', 10)))
   const rowTotal = rowSizesRaw.reduce((a, b) => a + b, 0) || 1
 
-  const { cells } = buildCellMatrix(tbl, ctx.theme, tblStyle)
+  const { cells, tcEls } = buildCellMatrix(tbl, ctx.theme, tblStyle)
+  // 模型限制：单元格只存单一文本与单一边框；富文本/四边不一致在此如实报告
+  let rich = 0
+  let edgeMismatch = false
+  for (const row of tcEls) {
+    for (const tc of row) {
+      if (!tc) continue
+      if (hasRichRuns(tc, ctx.theme)) rich += 1
+      if (hasEdgeMismatch(tc, ctx.theme)) edgeMismatch = true
+    }
+  }
+  if (rich) addSkipped(ctx.report, 'tableRichText')
+  if (edgeMismatch) addSkipped(ctx.report, 'tableBorders')
   const table: TableElement = {
     id: genId('tb-'), type: 'table', x, y, w, h,
     colSizes: colSizesRaw.map((c) => c / colTotal),
     rowSizes: rowSizesRaw.map((r) => r / rowTotal),
     cells, name: '表格',
   }
+  const rot = frameRotOf(firstDescendant(node, 'p:xfrm') ?? firstDescendant(node, 'a:xfrm'), xf).rot
+  if (rot) table.rotate = Math.round(rot)
   // 表格外框与单元格边框同源：取首个带边框色的单元格（含表格样式网格线），避免外灰内黑的混搭
   const firstBorder = cells.flat().find((cell) => cell?.style?.bordercolor)
   if (firstBorder?.style?.bordercolor) {

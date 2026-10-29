@@ -64,6 +64,37 @@ describe('styles.resolveColor', () => {
     expect(after[2]).toBeGreaterThan(before[2])
   })
 
+  it('prstClr 全量表：长名/短别名都命中', () => {
+    expect(resolveColor(el(`<a:solidFill xmlns:a="urn:a"><a:prstClr val="dkSlateBlue"/></a:solidFill>`), theme)).toBe('#483D8B')
+    expect(resolveColor(el(`<a:solidFill xmlns:a="urn:a"><a:prstClr val="lightGoldenrodYellow"/></a:solidFill>`), theme)).toBe('#FAFAD2')
+    expect(resolveColor(el(`<a:solidFill xmlns:a="urn:a"><a:prstClr val="notAColor"/></a:solidFill>`), theme)).toBeUndefined()
+  })
+
+  it('alphaMod/alphaOff：作用在默认不透明或已有 alpha 上', () => {
+    expect(resolveColor(el(`<a:solidFill xmlns:a="urn:a"><a:srgbClr val="FF0000"><a:alphaMod val="50000"/></a:srgbClr></a:solidFill>`), theme)).toBe('#FF000080')
+    // 先 alpha 50% 再 alphaMod 50% → 25%
+    expect(resolveColor(el(`<a:solidFill xmlns:a="urn:a"><a:srgbClr val="FF0000"><a:alpha val="50000"/><a:alphaMod val="50000"/></a:srgbClr></a:solidFill>`), theme)).toBe('#FF000040')
+    expect(resolveColor(el(`<a:solidFill xmlns:a="urn:a"><a:srgbClr val="FF0000"><a:alphaOff val="-75000"/></a:srgbClr></a:solidFill>`), theme)).toBe('#FF000040')
+  })
+
+  it('单通道修饰：red/redMod/redOff 只改 R 通道', () => {
+    expect(resolveColor(el(`<a:solidFill xmlns:a="urn:a"><a:srgbClr val="000000"><a:red val="100000"/></a:srgbClr></a:solidFill>`), theme)).toBe('#FF0000')
+    expect(resolveColor(el(`<a:solidFill xmlns:a="urn:a"><a:srgbClr val="804020"><a:redMod val="0"/></a:srgbClr></a:solidFill>`), theme)).toBe('#004020')
+    expect(resolveColor(el(`<a:solidFill xmlns:a="urn:a"><a:srgbClr val="000000"><a:greenOff val="50000"/><a:blue val="100000"/></a:srgbClr></a:solidFill>`), theme)).toBe('#0080FF')
+  })
+
+  it('hueOff/satOff：色相旋转与饱和度偏移', () => {
+    // 纯红 hueOff 120° → 纯绿（HSL 往返允许 1 通道误差）
+    const green = resolveColor(el(`<a:solidFill xmlns:a="urn:a"><a:srgbClr val="FF0000"><a:hueOff val="33333"/></a:srgbClr></a:solidFill>`), theme)!
+    const [, g1] = hexToChannels(green)
+    expect(g1).toBeGreaterThan(250)
+    // satMod 0 → 去饱和为灰（亮度不变）
+    expect(resolveColor(el(`<a:solidFill xmlns:a="urn:a"><a:srgbClr val="FF0000"><a:satMod val="0"/></a:srgbClr></a:solidFill>`), theme)).toBe('#808080')
+    // satOff 提升饱和度：浅红变成更纯的红
+    const deeper = resolveColor(el(`<a:solidFill xmlns:a="urn:a"><a:srgbClr val="F08080"><a:satOff val="40000"/></a:srgbClr></a:solidFill>`), theme)!
+    expect(hexToChannels(deeper)[1]).toBeLessThan(0x80)
+  })
+
   it('非法 hex 返回 undefined（不产生 NaN 传播）', () => {
     expect(resolveColor(el(`<a:solidFill xmlns:a="urn:a"><a:srgbClr val="GGHHII"/></a:solidFill>`), theme)).toBeUndefined()
   })

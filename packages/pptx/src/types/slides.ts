@@ -296,6 +296,11 @@ export interface ChartElement extends ElementBase {
   title?: string
   fontSize?: number
   gridColor?: string
+  /** 图表区背景（chartSpace/c:spPr）：纯色、渐变、图片三选一 */
+  backgroundColor?: string
+  backgroundGradient?: Gradient
+  /** 图片背景（data URL） */
+  backgroundImage?: string
 }
 
 /* ---------- 音视频元素 ---------- */

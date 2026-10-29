@@ -7,21 +7,69 @@
 import { parseChartEl } from '../import/elements/chart'
 import { IDENTITY_XFORM } from '../import/context'
 import { svgEl, type PreviewCtx } from './svg'
-import type { ChartElement } from '../../types/slides'
+import type { ChartElement, Gradient } from '../../types/slides'
 
 /** Office 默认图表主题色（系列循环取色） */
 const CHART_COLORS = ['#4472C4', '#ED7D31', '#A5A5A5', '#FFC000', '#5B9BD5', '#70AD47']
 
+/** 系列取色：导入的显式系列色优先，未提供时循环 Office 默认色板 */
+function colorAt(chart: ChartElement, i: number): string {
+  const colors = chart.chartColors
+  if (colors && colors.length) return colors[i % colors.length]
+  return CHART_COLORS[i % CHART_COLORS.length]
+}
+
 type BoxLike = { x: number; y: number; w: number; h: number }
+
+/** 图表区背景：图片（cover 裁剪）/ 渐变（defs 登记）/ 纯色；无背景返回 null */
+function backgroundLayer(chart: ChartElement, ctx: PreviewCtx, box: BoxLike): SVGElement | null {
+  if (chart.backgroundImage) {
+    return svgEl('image', {
+      x: box.x, y: box.y, width: box.w, height: box.h,
+      href: chart.backgroundImage, preserveAspectRatio: 'xMidYMid slice',
+    })
+  }
+  const gradient: Gradient | undefined = chart.backgroundGradient
+  if (gradient) {
+    const id = ctx.uid('chart-bg')
+    const def = gradient.type === 'radial'
+      ? svgEl('radialGradient', { id, cx: '50%', cy: '50%', r: '50%' })
+      : (() => {
+          const ang = ((gradient.rotate ?? 0) * Math.PI) / 180
+          return svgEl('linearGradient', {
+            id,
+            x1: 0.5 - Math.cos(ang) / 2,
+            y1: 0.5 - Math.sin(ang) / 2,
+            x2: 0.5 + Math.cos(ang) / 2,
+            y2: 0.5 + Math.sin(ang) / 2,
+            gradientUnits: 'objectBoundingBox',
+          })
+        })()
+    for (const c of gradient.colors) {
+      def.appendChild(svgEl('stop', { offset: c.pos, 'stop-color': c.color }))
+    }
+    ctx.defs.appendChild(def)
+    return svgEl('rect', { x: box.x, y: box.y, width: box.w, height: box.h, fill: `url(#${id})` })
+  }
+  if (chart.backgroundColor) {
+    return svgEl('rect', { x: box.x, y: box.y, width: box.w, height: box.h, fill: chart.backgroundColor })
+  }
+  return null
+}
 
 export async function renderChart(node: Element, ctx: PreviewCtx): Promise<SVGElement | null> {
   const chart = await parseChartEl(node, ctx, IDENTITY_XFORM, ctx.pkg)
   if (!chart) return null
   const box: BoxLike = { x: chart.x, y: chart.y, w: chart.w, h: chart.h }
   const g = svgEl('g')
+  if (chart.rotate) {
+    g.setAttribute('transform', `rotate(${chart.rotate},${box.x + box.w / 2},${box.y + box.h / 2})`)
+  }
+  const bg = backgroundLayer(chart, ctx, box)
+  if (bg) g.appendChild(bg)
   if (chart.chartType === 'radar') {
-    // 雷达图结构复杂（放射网格 + 面积叠加），预览降级为占位框
-    g.appendChild(svgEl('rect', { x: box.x, y: box.y, width: box.w, height: box.h, fill: '#F2F2F2', stroke: '#BFBFBF', 'stroke-width': 1 }))
+    // 雷达图结构复杂（放射网格 + 面积叠加），预览降级为占位框（已有背景时不覆盖）
+    g.appendChild(svgEl('rect', { x: box.x, y: box.y, width: box.w, height: box.h, fill: bg ? 'none' : '#F2F2F2', stroke: '#BFBFBF', 'stroke-width': 1 }))
     const t = svgEl('text', { x: box.x + box.w / 2, y: box.y + box.h / 2, 'text-anchor': 'middle', 'font-size': 12, fill: '#999999' })
     t.textContent = '雷达图暂不支持预览'
     g.appendChild(t)
@@ -32,11 +80,13 @@ export async function renderChart(node: Element, ctx: PreviewCtx): Promise<SVGEl
     // 饼图/圆环为极坐标类，不画笛卡尔坐标轴
     drawPie(g, chart, box, t === 'pie-doughnut')
   } else {
-    drawAxis(g, box)
+    if (chart.elements?.gridLine) drawGrid(g, box, chart.gridColor)
+    if (chart.elements?.axis !== false) drawAxis(g, box)
     if (t.startsWith('bar')) drawBars(g, chart, box, t.includes('horizontal'), t.includes('stack') || t === 'bar-percent')
     else if (t.startsWith('area')) drawArea(g, chart, box, t === 'area-stack')
     else if (t === 'scatter') drawScatter(g, chart, box)
     else drawLine(g, chart, box, t === 'line-stack', t === 'line-marker')
+    if (chart.elements?.legend) drawLegend(g, chart, box)
   }
   if (chart.title) {
     const title = svgEl('text', { x: box.x + box.w / 2, y: box.y + 16, 'text-anchor': 'middle', 'font-size': 14, fill: '#333333' })
@@ -60,10 +110,44 @@ function valueMax(chart: ChartElement, stacked: boolean): number {
   return base * 1.1 || 1
 }
 
+function drawGrid(g: SVGElement, box: BoxLike, color?: string): void {
+  const p = plotRect(box)
+  for (let i = 0; i <= 4; i += 1) {
+    const y = p.y + (p.h * i) / 4
+    g.appendChild(svgEl('line', { x1: p.x, y1: y, x2: p.x + p.w, y2: y, stroke: color ?? '#E5E5E5', 'stroke-width': 0.5 }))
+  }
+}
+
 function drawAxis(g: SVGElement, box: BoxLike): void {
   const p = plotRect(box)
   g.appendChild(svgEl('line', { x1: p.x, y1: p.y, x2: p.x, y2: p.y + p.h, stroke: '#999999', 'stroke-width': 1 }))
   g.appendChild(svgEl('line', { x1: p.x, y1: p.y + p.h, x2: p.x + p.w, y2: p.y + p.h, stroke: '#999999', 'stroke-width': 1 }))
+}
+
+/** 图例：底部一行色块 + 系列名 */
+function drawLegend(g: SVGElement, chart: ChartElement, box: BoxLike): void {
+  const series = chart.data.series
+  if (!series.length) return
+  const fs = Math.max(9, Math.min(12, chart.fontSize ?? 10))
+  const y = box.y + box.h - 6
+  let x = box.x + 12
+  for (let i = 0; i < series.length; i += 1) {
+    const label = series[i].name || `系列${i + 1}`
+    g.appendChild(svgEl('rect', { x, y: y - fs, width: fs, height: fs, fill: colorAt(chart, i) }))
+    const t = svgEl('text', { x: x + fs + 4, y: y - 1, 'font-size': fs, fill: '#555555' })
+    t.textContent = label
+    g.appendChild(t)
+    x += fs + 10 + label.length * fs * 0.9
+  }
+}
+
+/** 数据标签：柱顶数值（elements.dataLabel 开启时） */
+function dataLabelText(g: SVGElement, chart: ChartElement, v: number, x: number, y: number): void {
+  if (!chart.elements?.dataLabel || v <= 0) return
+  const fs = Math.max(8, Math.min(12, chart.fontSize ?? 10))
+  const t = svgEl('text', { x, y, 'text-anchor': 'middle', 'font-size': fs, fill: '#555555' })
+  t.textContent = Number.isInteger(v) ? String(v) : String(Math.round(v * 100) / 100)
+  g.appendChild(t)
 }
 
 /** 柱状图：类目分带（band）。
@@ -81,7 +165,7 @@ function drawBars(g: SVGElement, chart: ChartElement, box: BoxLike, horizontal: 
     for (let si = 0; si < series.length; si += 1) {
       // 预览取舍：负值 clamp 到基线（按 0 处理）
       const v = Math.max(0, series[si].values[i] ?? 0)
-      const color = CHART_COLORS[si % CHART_COLORS.length]
+      const color = colorAt(chart, si)
       if (horizontal) {
         const seg = (v / maxV) * p.w
         if (stacked) {
@@ -95,9 +179,11 @@ function drawBars(g: SVGElement, chart: ChartElement, box: BoxLike, horizontal: 
         // 堆叠：占满整带，段沿值轴向上延伸
         const h = (v / maxV) * p.h
         g.appendChild(svgEl('rect', { x: p.x + band * i, y: p.y + p.h - ((acc + v) / maxV) * p.h, width: band, height: h, fill: color }))
+        dataLabelText(g, chart, v, p.x + band * i + band / 2, p.y + p.h - ((acc + v) / maxV) * p.h - 2)
       } else {
         const x = p.x + band * i + (band / groupSize) * si + (band / groupSize) * 0.1
         g.appendChild(svgEl('rect', { x, y: p.y + p.h - (v / maxV) * p.h, width: (band / groupSize) * 0.8, height: (v / maxV) * p.h, fill: color }))
+        dataLabelText(g, chart, v, x + (band / groupSize) * 0.4, p.y + p.h - (v / maxV) * p.h - 2)
       }
       acc += v
     }
@@ -111,7 +197,7 @@ function drawLine(g: SVGElement, chart: ChartElement, box: BoxLike, stacked: boo
   const maxV = valueMax(chart, stacked)
   const n = Math.max(1, labels.length)
   for (let si = 0; si < series.length; si += 1) {
-    const color = CHART_COLORS[si % CHART_COLORS.length]
+    const color = colorAt(chart, si)
     const pts: string[] = []
     for (let i = 0; i < n; i += 1) {
       const v = Math.max(0, series[si].values[i] ?? 0)
@@ -140,7 +226,7 @@ function drawArea(g: SVGElement, chart: ChartElement, box: BoxLike, stacked: boo
   for (const si of order) {
     const pts = rows[si].map((v, i) => `${p.x + (p.w * i) / Math.max(1, n - 1)},${p.y + p.h - (v / maxV) * p.h}`)
     const d = `M ${pts.join(' L ')} L ${p.x + p.w},${p.y + p.h} L ${p.x},${p.y + p.h} Z`
-    g.appendChild(svgEl('path', { d, fill: CHART_COLORS[si % CHART_COLORS.length], 'fill-opacity': stacked ? 1 : 0.5 }))
+    g.appendChild(svgEl('path', { d, fill: colorAt(chart, si), 'fill-opacity': stacked ? 1 : 0.5 }))
   }
 }
 
@@ -154,7 +240,7 @@ function drawScatter(g: SVGElement, chart: ChartElement, box: BoxLike): void {
   const minY = Math.min(0, ...ys)
   const maxY = Math.max(1, ...ys) * 1.1
   for (let si = 0; si < chart.data.series.length; si += 1) {
-    const color = CHART_COLORS[si % CHART_COLORS.length]
+    const color = colorAt(chart, si)
     const vals = chart.data.series[si].values
     xs.forEach((x, i) => {
       const y = vals[i]
@@ -181,7 +267,7 @@ function drawPie(g: SVGElement, chart: ChartElement, box: BoxLike, doughnut: boo
   let a0 = -Math.PI / 2
   for (let i = 0; i < vals.length; i += 1) {
     const a1 = a0 + (vals[i] / total) * Math.PI * 2
-    const color = CHART_COLORS[i % CHART_COLORS.length]
+    const color = colorAt(chart, i)
     if (a1 - a0 >= Math.PI * 2 - 1e-9) {
       // 单片满圆：弧命令退化，改画整圆（圆环用居中描边环）
       if (rIn <= 0) {

@@ -1,6 +1,7 @@
 // ECharts 图表渲染（与 eflink-excel 共用同一套配置构建，视觉一致）
 // 使用 SVG 渲染器：html-to-image 截图管线（缩略图/图片导出/降级导出）可直接捕获，且任意缩放清晰
 import { useEffect, useMemo, useRef } from 'react'
+import type { CSSProperties } from 'react'
 import * as echarts from 'echarts'
 import type { ChartElement } from '../../types/slides'
 import { buildChartOption } from '../../core/chart/chartOptions'
@@ -51,5 +52,26 @@ export function ChartRenderer({ el }: Props) {
     chartRef.current = null
   }, [])
 
-  return <div ref={hostRef} className="size-full overflow-hidden" />
+  // 图表区背景：外层 DOM 承载（ECharts 保持透明），截图管线可直接捕获
+  const backgroundStyle = useMemo<CSSProperties>(() => {
+    if (chartEl.backgroundImage) {
+      return {
+        backgroundImage: `url("${chartEl.backgroundImage}")`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+      }
+    }
+    const gradient = chartEl.backgroundGradient
+    if (gradient) {
+      const stops = gradient.colors.map((c) => `${c.color} ${Math.round(c.pos * 100)}%`).join(', ')
+      if (gradient.type === 'radial') return { backgroundImage: `radial-gradient(circle, ${stops})` }
+      // 内部 rotate 与 SVG 渐变同向（3 点钟起顺时针）；CSS 角度从 12 点钟起顺时针
+      return { backgroundImage: `linear-gradient(${Math.round((gradient.rotate ?? 0) + 90)}deg, ${stops})` }
+    }
+    if (chartEl.backgroundColor) return { backgroundColor: chartEl.backgroundColor }
+    return {}
+  }, [chartEl])
+
+  return <div ref={hostRef} className="size-full overflow-hidden" style={backgroundStyle} />
 }

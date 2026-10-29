@@ -1,8 +1,9 @@
 /** ppt/tableStyles.xml 解析：tblPr(firstRow/bandRow…) + tableStyleId → 单元格有效样式。
  * 层叠顺序（低→高）：wholeTbl < band1H/2H(bandRow) < band1V/2V(bandCol) < firstCol < lastCol < firstRow < lastRow；
  * 单元格级 tcPr 填充 / run 显式样式始终优先于样式层。 */
-import { attr, directChild, parseXML } from '../xml'
-import { resolveColor } from '../styles'
+import { attr, descendants, directChild, parseXML } from '../xml'
+import { refColor, resolveColor, styleMatrixEntry } from '../styles'
+import { builtinTableStyleXml } from './builtin-table-styles'
 import type { PptxPackage } from '../package'
 import type { PptxTheme } from '../theme'
 
@@ -45,14 +46,42 @@ export interface ResolvedTableStyle {
 /** 包级缓存：一个 pptx 通常只有一份 tableStyles.xml，逐表重复解析浪费 */
 const styleCache = new WeakMap<PptxPackage, Promise<{ defs: Map<string, TableStyleDef>; defId: string | null }>>()
 
-function parsePart(parent: Element | null, theme: PptxTheme): TableStylePart | undefined {
+/** 单条边框（a:ln 或 a:lnRef 引用主题线型）→ 颜色；noFill/缺省返回 undefined */
+function edgeBorderColor(edge: Element, theme: PptxTheme): string | undefined {
+  const ln = directChild(edge, 'a:ln')
+  if (ln) {
+    if (directChild(ln, 'a:noFill')) return undefined
+    return resolveColor(directChild(ln, 'a:solidFill'), theme)
+  }
+  const lnRef = directChild(edge, 'a:lnRef')
+  if (!lnRef) return undefined
+  const idx = parseInt(attr(lnRef, 'idx') ?? '0', 10)
+  if (idx < 1) return undefined
+  const matrix = styleMatrixEntry(theme, 'line', idx)
+  return (matrix ? resolveColor(directChild(matrix, 'a:solidFill'), theme, refColor(lnRef)) : undefined)
+    ?? resolveColor(lnRef, theme) ?? undefined
+}
+
+/** 网格线优先于外框：单元格之间可见的是 inside 边框（左/右/上/下作为兜底） */
+function borderColorOf(tcBdr: Element, theme: PptxTheme): string | undefined {
+  for (const name of ['insideH', 'insideV', 'left', 'right', 'top', 'bottom']) {
+    const edge = directChild(tcBdr, `a:${name}`)
+    if (!edge) continue
+    const color = edgeBorderColor(edge, theme)
+    if (color) return color
+  }
+  return undefined
+}
+
+/** defaultFill：表级底色（a:tblBg），仅用于 wholeTbl 未声明填充时兜底 */
+function parsePart(parent: Element | null, theme: PptxTheme, defaultFill?: string): TableStylePart | undefined {
   if (!parent) return undefined
   const part: TableStylePart = {}
   const tx = directChild(parent, 'a:tcTxStyle')
   if (tx) {
     if (attr(tx, 'b') === 'on') part.bold = true
     for (const child of Array.from(tx.children)) {
-      if (child.nodeName === 'a:schemeClr' || child.nodeName === 'a:srgbClr' || child.nodeName === 'a:prstClr') {
+      if (['schemeClr', 'srgbClr', 'prstClr'].includes(child.localName)) {
         const color = resolveColor(tx, theme)
         if (color) part.color = color
         break
@@ -66,18 +95,11 @@ function parsePart(parent: Element | null, theme: PptxTheme): TableStylePart | u
     if (fill) part.fill = fill
     const tcBdr = directChild(tcStyle, 'a:tcBdr')
     if (tcBdr) {
-      const edges = new Set(['a:left', 'a:right', 'a:top', 'a:bottom', 'a:insideH', 'a:insideV'])
-      for (const edge of Array.from(tcBdr.children)) {
-        if (!edges.has(edge.nodeName)) continue
-        const ln = directChild(edge, 'a:ln')
-        const border = ln ? resolveColor(directChild(ln, 'a:solidFill'), theme) : undefined
-        if (border) {
-          part.border = border
-          break
-        }
-      }
+      const border = borderColorOf(tcBdr, theme)
+      if (border) part.border = border
     }
   }
+  if (!part.fill && defaultFill) part.fill = defaultFill
   return part.fill || part.color || part.bold || part.border ? part : undefined
 }
 
@@ -92,7 +114,7 @@ async function loadStyleTable(pkg: PptxPackage, theme: PptxTheme) {
       if (xml) {
         const root = parseXML(xml).documentElement
         defId = attr(root, 'def')?.replace(/[{}]/g, '') ?? null
-        for (const styleEl of Array.from(root.getElementsByTagName('a:tblStyle'))) {
+        for (const styleEl of descendants(root, 'a:tblStyle')) {
           const id = attr(styleEl, 'styleId')?.replace(/[{}]/g, '')
           if (!id) continue
           defs.set(id, {
@@ -115,6 +137,42 @@ async function loadStyleTable(pkg: PptxPackage, theme: PptxTheme) {
   return cached
 }
 
+/** 内置样式缓存：同一主题色组合下各 styleId 的解析结果（null = 未支持，避免重复解析） */
+const builtinCache = new Map<string, TableStyleDef | null>()
+
+function themeSignature(theme: PptxTheme): string {
+  return `${Object.entries(theme.colorMap).sort().map(([k, v]) => `${k}=${v}`).join(',')}|${Object.values(theme.schemeColors).join(',')}`
+}
+
+/** PowerPoint 自带样式 GUID 不在 tableStyles.xml 里：按规范基础定义 + 主题色替换解析 */
+function builtinTableStyle(styleId: string, theme: PptxTheme): TableStyleDef | undefined {
+  const id = styleId.replace(/[{}]/g, '').toUpperCase()
+  const key = `${id}|${themeSignature(theme)}`
+  if (builtinCache.has(key)) return builtinCache.get(key) ?? undefined
+  const xml = builtinTableStyleXml(id)
+  let def: TableStyleDef | undefined
+  if (xml) {
+    const root = parseXML(xml).documentElement
+    // 表级底色（tblBg）：单元格未声明填充时透出，作为 wholeTbl 兜底
+    const tblBg = directChild(root, 'a:tblBg')
+    const bgFn = tblBg ? (directChild(tblBg, 'a:fillRef') ?? directChild(tblBg, 'a:solidFill')) : null
+    const bgColor = bgFn ? resolveColor(bgFn, theme, refColor(bgFn)) : undefined
+    def = {
+      whole: parsePart(directChild(root, 'a:wholeTbl'), theme, bgColor),
+      firstRow: parsePart(directChild(root, 'a:firstRow'), theme),
+      lastRow: parsePart(directChild(root, 'a:lastRow'), theme),
+      firstCol: parsePart(directChild(root, 'a:firstCol'), theme),
+      lastCol: parsePart(directChild(root, 'a:lastCol'), theme),
+      band1H: parsePart(directChild(root, 'a:band1H'), theme),
+      band2H: parsePart(directChild(root, 'a:band2H'), theme),
+      band1V: parsePart(directChild(root, 'a:band1V'), theme),
+      band2V: parsePart(directChild(root, 'a:band2V'), theme),
+    }
+  }
+  builtinCache.set(key, def ?? null)
+  return def
+}
+
 /** tbl 元素 → 生效的表格样式（tblPr 标志位 + tableStyleId）。
  * 仅显式 tableStyleId 才套用样式：tblStyleLst@def 只定义新建表的默认样式，
  * 未引用样式的表（空 tblPr）不回退套用，否则会给纯边框表错误加填充 */
@@ -132,7 +190,7 @@ export async function resolveTableStyle(tbl: Element, pkg: PptxPackage, theme: P
     bandCol: attr(tblPr, 'bandCol') === '1',
   }
   const { defs } = await loadStyleTable(pkg, theme)
-  const def = defs.get(idRaw.replace(/[{}]/g, ''))
+  const def = defs.get(idRaw.replace(/[{}]/g, '')) ?? builtinTableStyle(idRaw, theme)
   if (!def) return undefined
   return { flags, def }
 }

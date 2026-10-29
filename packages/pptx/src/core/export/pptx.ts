@@ -505,9 +505,10 @@ async function exportChart(slide: Slide, el: ChartElement, presentation: Present
       props: { x: IN(b.x), y: IN(b.y), w: IN(b.w), h: IN(b.h), rotate: 0 },
     }
   }
-  // 雷达图 pptxgenjs 不支持、趋势线原生图表无法表达 → 导出为图片保证所见即所得
+  // 雷达图 pptxgenjs 不支持、趋势线与图表区背景原生图表无法表达 → 导出为图片保证所见即所得
   const native = chartNativeSpec(chart.chartType)
-  if (!native || elements.trendline) return asImage()
+  const hasBackground = Boolean(chart.backgroundColor || chart.backgroundGradient || chart.backgroundImage)
+  if (!native || elements.trendline || hasBackground) return asImage()
 
   return {
     type: 'chart',

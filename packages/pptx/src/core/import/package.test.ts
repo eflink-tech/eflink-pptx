@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import JSZip from 'jszip'
-import { PptxPackage, resolveTarget } from './package'
+import { PptxPackage, relTypeIs, resolveTarget } from './package'
 
 async function buildPkg(): Promise<PptxPackage> {
   const zip = new JSZip()
@@ -41,6 +41,13 @@ describe('PptxPackage', () => {
     const url = await pkg.mediaDataUrl('ppt/media/image1.png')
     expect(url).toMatch(/^data:image\/png;base64,/)
     expect(await pkg.mediaDataUrl('ppt/media/none.png')).toBeUndefined()
+  })
+
+  it('relTypeIs 只比 URI 末段，兼容 strict OOXML 命名空间', () => {
+    expect(relTypeIs('http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme', 'theme')).toBe(true)
+    expect(relTypeIs('http://purl.oclc.org/ooxml/officeDocument/relationships/slideLayout', 'slideLayout')).toBe(true)
+    expect(relTypeIs('http://purl.oclc.org/ooxml/officeDocument/relationships/slide', 'slideLayout')).toBe(false)
+    expect(relTypeIs(undefined, 'theme')).toBe(false)
   })
 
   it('resolveTarget 处理相对/绝对路径', () => {

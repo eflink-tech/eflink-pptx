@@ -11,6 +11,11 @@ export interface PartRel {
   mode?: string
 }
 
+/** 关系 Type 匹配：只比 URI 末段（如 'slideLayout'），兼容 transitional/strict 两套命名空间 */
+export function relTypeIs(type: string | undefined, name: string): boolean {
+  return Boolean(type) && (type as string).endsWith(`/${name}`)
+}
+
 /** 相对路径解析：'../media/a.png'（基于 'ppt/slides'）→ 'ppt/media/a.png' */
 export function resolveTarget(baseDir: string, target: string): string {
   if (target.startsWith('/')) return target.slice(1)
@@ -34,6 +39,7 @@ export class PptxPackage {
   private zip: JSZip
   private relsCache = new Map<string, Map<string, PartRel>>()
   private mediaCache = new Map<string, string>()
+  private textCache = new Map<string, string | null>()
 
   private constructor(zip: JSZip) {
     this.zip = zip
@@ -44,7 +50,11 @@ export class PptxPackage {
   }
 
   async text(path: string): Promise<string | null> {
-    return (await this.zip.file(path)?.async('text')) ?? null
+    const cached = this.textCache.get(path)
+    if (cached !== undefined) return cached
+    const xml = (await this.zip.file(path)?.async('text')) ?? null
+    this.textCache.set(path, xml)
+    return xml
   }
 
   /** zip 内全部文件路径列表（如 sldIdLst 缺失时按 slideN.xml 枚举页面兜底） */

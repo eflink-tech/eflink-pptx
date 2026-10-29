@@ -214,7 +214,8 @@ describe('parseShapeEl', () => {
     if (result?.type !== 'shape') throw new Error('expected shape')
     expect(result.defaultFontName).toBe(`'Calibri', 'PingFang SC', 'Microsoft YaHei', sans-serif`)
     expect(result.fontSize).toBe(24)
-    expect(result.defaultColor).toBe('#FFFFFF')
+    // 无 p:style fontRef 时文字默认色为 tx1（dk1），不再按形状填充反推白色
+    expect(result.defaultColor).toBe('#000000')
   })
 
   it('形状文本首 run 无 rPr 时回退 lstStyle defRPr 默认样式；首 run 为 a:fld 也可取样式', async () => {

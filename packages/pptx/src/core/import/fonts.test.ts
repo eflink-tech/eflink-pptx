@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { fontStackOf } from './fonts'
+import JSZip from 'jszip'
+import { fontStackOf, hasEmbeddedFonts } from './fonts'
+import { PptxPackage } from './package'
 import { DEFAULT_SCHEME, type PptxTheme } from './theme'
 
 const theme: PptxTheme = {
@@ -10,6 +12,24 @@ const theme: PptxTheme = {
   minorEaFont: '微软雅黑',
   colorMap: {},
 }
+
+async function pkgWith(presXml: string): Promise<PptxPackage> {
+  const zip = new JSZip()
+  zip.file('ppt/presentation.xml', presXml)
+  return PptxPackage.load(await zip.generateAsync({ type: 'blob' }))
+}
+
+describe('hasEmbeddedFonts', () => {
+  it('p:embeddedFontLst 下有 embeddedFont 才为 true', async () => {
+    expect(await hasEmbeddedFonts(await pkgWith(
+      '<p:presentation xmlns:p="urn:p"><p:embeddedFontLst><p:embeddedFont/></p:embeddedFontLst></p:presentation>',
+    ))).toBe(true)
+    expect(await hasEmbeddedFonts(await pkgWith(
+      '<p:presentation xmlns:p="urn:p"><p:embeddedFontLst/></p:presentation>',
+    ))).toBe(false)
+    expect(await hasEmbeddedFonts(await pkgWith('<p:presentation xmlns:p="urn:p"/>'))).toBe(false)
+  })
+})
 
 describe('fontStackOf', () => {
   it('西文 + 东亚字体 → latin 在前、ea 次之、中文回退栈兜底', () => {

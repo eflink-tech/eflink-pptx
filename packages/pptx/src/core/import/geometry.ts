@@ -1,5 +1,5 @@
 /** 几何解析：全量 OOXML prstGeom 预设映射 + custGeom → SVG path（0-100 视口空间） */
-import { attr, directChildren, firstDescendant } from './xml'
+import { attr, descendants, directChildren, firstDescendant } from './xml'
 
 // PRST_MAP 仅列真实存在的 OOXML 预设名（不编造预设）；未列出的预设由 getShapeKey 兜底 'rect'。
 // connector 类预设映射为 'rect' 仅为占位——p:cxnSp 节点在 shape.ts 中先按线条处理，不会走到该映射。
@@ -62,7 +62,7 @@ export function getShapeKey(prst: string): string {
 export function presetGeomToPath(prstGeom: Element | null, prst: string, w: number, h: number): string | null {
   if (!prstGeom) return null
   const gdVal = (name: string): number | null => {
-    const gd = Array.from(prstGeom.getElementsByTagName('a:gd')).find((g) => attr(g, 'name') === name)
+    const gd = descendants(prstGeom, 'a:gd').find((g) => attr(g, 'name') === name)
     const m = (gd ? attr(gd, 'fmla') : null)?.match(/val\s+(-?\d+)/)
     return m ? parseInt(m[1], 10) : null
   }
@@ -100,41 +100,76 @@ export function custGeomToPath(cust: Element, w: number, h: number): string | nu
   if (!pathLst) return null
   const emuW = Math.max(1, w * 9525)
   const emuH = Math.max(1, h * 9525)
-  const cmds: string[] = []
   const fmt = (n: number) => Math.round(n * 100) / 100
-  for (const pathEl of directChildren(pathLst, 'a:path')) {
+  const paths = directChildren(pathLst, 'a:path')
+  // fill="none" 的子路径是纯描边装饰（如下划线曲线），并入填充路径会产生色块；存在填充路径时跳过
+  const hasFilledPath = paths.some((p) => attr(p, 'fill') !== 'none')
+  const cmds: string[] = []
+  for (const pathEl of paths) {
+    if (hasFilledPath && attr(pathEl, 'fill') === 'none') continue
     const pw = parseInt(attr(pathEl, 'w') ?? '0', 10) || emuW
     const ph = parseInt(attr(pathEl, 'h') ?? '0', 10) || emuH
     // 纯归一化到 0-100 视口空间：坐标超出路径尺寸合法，不做有损裁剪（渲染端 viewBox 负责裁剪显示）
     const fx = (x: number) => (x / pw) * 100
     const fy = (y: number) => (y / ph) * 100
+    // 当前点（path 坐标），arcTo 需要由它反推椭圆中心
+    let curX = 0
+    let curY = 0
     for (const seg of Array.from(pathEl.children)) {
       const pts = directChildren(seg, 'a:pt').map((pt) => [
         parseInt(attr(pt, 'x') ?? '0', 10),
         parseInt(attr(pt, 'y') ?? '0', 10),
       ] as const)
-      switch (seg.nodeName) {
-        case 'a:moveTo':
-          if (pts[0]) cmds.push(`M${fmt(fx(pts[0][0]))},${fmt(fy(pts[0][1]))}`)
+      switch (seg.localName) {
+        case 'moveTo':
+          if (pts[0]) {
+            cmds.push(`M${fmt(fx(pts[0][0]))},${fmt(fy(pts[0][1]))}`)
+            curX = pts[0][0]
+            curY = pts[0][1]
+          }
           break
-        case 'a:lnTo':
-          if (pts[0]) cmds.push(`L${fmt(fx(pts[0][0]))},${fmt(fy(pts[0][1]))}`)
+        case 'lnTo':
+          if (pts[0]) {
+            cmds.push(`L${fmt(fx(pts[0][0]))},${fmt(fy(pts[0][1]))}`)
+            curX = pts[0][0]
+            curY = pts[0][1]
+          }
           break
-        case 'a:cubicBezTo':
+        case 'cubicBezTo':
           if (pts.length >= 3) {
             cmds.push(`C${fmt(fx(pts[0][0]))},${fmt(fy(pts[0][1]))} ${fmt(fx(pts[1][0]))},${fmt(fy(pts[1][1]))} ${fmt(fx(pts[2][0]))},${fmt(fy(pts[2][1]))}`)
+            curX = pts[2][0]
+            curY = pts[2][1]
           }
           break
-        case 'a:quadBezTo':
+        case 'quadBezTo':
           if (pts.length >= 2) {
             cmds.push(`Q${fmt(fx(pts[0][0]))},${fmt(fy(pts[0][1]))} ${fmt(fx(pts[1][0]))},${fmt(fy(pts[1][1]))}`)
+            curX = pts[1][0]
+            curY = pts[1][1]
           }
           break
-        case 'a:close':
-          cmds.push('Z')
+        case 'arcTo': {
+          // wR/hR 为椭圆半径（path 坐标），stAng/swAng 为 1/60000 度；y 轴向下，正角顺时针
+          const wR = Math.abs(parseInt(attr(seg, 'wR') ?? '0', 10))
+          const hR = Math.abs(parseInt(attr(seg, 'hR') ?? '0', 10))
+          const st = (parseInt(attr(seg, 'stAng') ?? '0', 10) / 60000) * (Math.PI / 180)
+          const sw = (parseInt(attr(seg, 'swAng') ?? '0', 10) / 60000) * (Math.PI / 180)
+          if (!wR || !hR || !sw) break
+          // 弧起点即当前点，椭圆中心 = 起点 - 半径向量(stAng)
+          const cxx = curX - wR * Math.cos(st)
+          const cyy = curY - hR * Math.sin(st)
+          const endX = cxx + wR * Math.cos(st + sw)
+          const endY = cyy + hR * Math.sin(st + sw)
+          const large = Math.abs(sw) > Math.PI ? 1 : 0
+          const sweep = sw > 0 ? 1 : 0
+          cmds.push(`A${fmt(fx(wR))},${fmt(fy(hR))} 0 ${large} ${sweep} ${fmt(fx(endX))},${fmt(fy(endY))}`)
+          curX = endX
+          curY = endY
           break
-        case 'a:arcTo':
-          // a:arcTo 无 a:pt 子元素，暂不支持圆弧参数：跳过该段（弦线近似，由前后段连线闭合）
+        }
+        case 'close':
+          cmds.push('Z')
           break
         default:
           break

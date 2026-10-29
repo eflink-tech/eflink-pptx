@@ -10,7 +10,9 @@ export async function renderPicture(node: Element, ctx: PreviewCtx): Promise<SVG
   if (!box) return null
   const blipFill = firstDescendant(node, 'p:blipFill') ?? firstDescendant(node, 'a:blipFill')
   const blip = blipFill ? directChild(blipFill, 'a:blip') : null
-  const embedId = attr(blip, 'r:embed')
+  // SVG 矢量替代优先（PowerPoint 同时存 PNG 后备）
+  const svgBlip = blip ? firstDescendant(blip, 'asvg:svgBlip') ?? firstDescendant(blip, 'svgBlip') : null
+  const embedId = attr(svgBlip, 'r:embed') ?? attr(blip, 'r:embed')
   // pkg 异常（测试桩缺失 relTarget、畸形包）一律按图片缺失降级，不中断整页渲染
   let src: string | undefined
   try {
