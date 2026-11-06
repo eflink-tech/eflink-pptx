@@ -1,5 +1,5 @@
 // 左侧幻灯片缩略图面板：选择/排序/右键菜单
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useI18n } from '@eflink-tech/office-kit'
 import { useEditorStore } from '../../store/editorStore'
 import { SlideRenderer } from '../canvas/SlideRenderer'
@@ -16,6 +16,19 @@ export function ThumbnailPanel() {
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   /** 当前拖拽悬停的目标索引（用于显示插入指示线） */
   const [dropIndex, setDropIndex] = useState<number | null>(null)
+  const listRef = useRef<HTMLDivElement | null>(null)
+
+  // 当前页变化（翻页/快捷键/查找跳转）时把缩略图滚到可视区，仅在越界时滚动
+  useEffect(() => {
+    const list = listRef.current
+    const item = list?.querySelector<HTMLElement>('[data-active-thumb="true"]')
+    if (!list || !item) return
+    const listRect = list.getBoundingClientRect()
+    const itemRect = item.getBoundingClientRect()
+    const gap = 8
+    if (itemRect.top < listRect.top) list.scrollTop -= listRect.top - itemRect.top + gap
+    else if (itemRect.bottom > listRect.bottom) list.scrollTop += itemRect.bottom - listRect.bottom + gap
+  }, [slideIndex, presentation.slides.length])
 
   const ratio = presentation.viewportRatio
   const thumbH = Math.round(THUMB_WIDTH / ratio)
@@ -63,7 +76,7 @@ export function ThumbnailPanel() {
       </div>
       {/* 每行 justify-center 居中：页码左空隙与缩略图右空隙（滚动条所在）自动对称；
           [scrollbar-gutter:stable] 为经典滚动条环境（Windows）常驻预留宽度，有/无滚动条布局一致 */}
-      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto [scrollbar-gutter:stable]">
+      <div ref={listRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto [scrollbar-gutter:stable]">
         {presentation.slides.map((slide, index) => (
           <div key={slide.id} className="relative flex items-center justify-center gap-1.5">
             {/* 拖拽插入指示线（上） */}
@@ -96,6 +109,7 @@ export function ThumbnailPanel() {
                 setMenu({ index, x: e.clientX, y: e.clientY })
               }}
               data-testid={`thumb-${index}`}
+              data-active-thumb={index === slideIndex ? 'true' : undefined}
             >
               <div className="overflow-hidden rounded bg-white shadow-sm">
                 <div style={{ width: THUMB_WIDTH, height: thumbH }}>
