@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import {
   BarChart3, Download, FilePlus2, Grid3x3,
-  Image as ImageIcon, Keyboard, LayoutTemplate, MessageCircle, MonitorPlay,
+  ImagePlus, Keyboard, LayoutTemplate, MessageCircle, MonitorPlay,
   MonitorSpeaker, Music, Palette, PanelLeft, Redo2, Save, Search, Share2,
   Shapes, Sigma, Spline, Table2, Type, Undo2, Upload, Video, Sparkles,
 } from 'lucide-react'
@@ -170,7 +170,7 @@ export function TopBar({ branding }: { branding?: OfficeHeaderBrand | false } = 
         [
           { key: 'table', label: t('pptx.insert.table'), icon: <Table2 size={16} />, onSelect: () => insertCentered((x, y) => createTableElement(x, y)) },
           { key: 'chart', label: t('pptx.insert.chart'), icon: <BarChart3 size={16} />, onSelect: () => insertCentered((x, y) => createChartElement(x, y, 'bar-cluster', t)) },
-          { key: 'image', label: t('pptx.insert.image'), icon: <ImageIcon size={16} />, onSelect: () => pickFile('image/*', (file) => void insertImageFile(file)) },
+          { key: 'image', label: t('pptx.insert.image'), icon: <ImagePlus size={16} />, onSelect: () => pickFile('image/*', (file) => void insertImageFile(file)) },
         ],
         [
           { key: 'video', label: t('pptx.insert.video'), icon: <Video size={16} />, onSelect: () => pickMedia('video') },
