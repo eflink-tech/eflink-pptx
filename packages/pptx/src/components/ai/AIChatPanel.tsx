@@ -71,7 +71,9 @@ export function AIChatPanel() {
   }, [])
 
   useEffect(() => {
-    listRef.current?.scrollTo({ top: listRef.current.scrollHeight })
+    // 用 scrollTop 赋值而非 scrollTo：面板常驻挂载后，jsdom 下 Element.scrollTo 不存在
+    const el = listRef.current
+    if (el) el.scrollTop = el.scrollHeight
   }, [messages, busy])
 
   // 会话持久化：消息变化时写入 Dexie
