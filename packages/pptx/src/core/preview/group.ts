@@ -1,6 +1,7 @@
 /** p:grpSp → <g>：SVG transform 完整表达 child→parent 映射（缩放/旋转/翻转），子元素按子空间坐标原样渲染，
  * 由组 g 的 transform 统一映射到父空间。 */
 import { attr, directChild } from '../import/xml'
+import { groupChildContext } from '../import/elements/group'
 import { emu2pxF, svgEl, type PreviewCtx } from './svg'
 import { renderSpTreeNode } from './dispatch'
 
@@ -8,6 +9,8 @@ export async function renderGroup(grpSp: Element, ctx: PreviewCtx): Promise<SVGE
   // xfrm 只从本组合的 p:grpSpPr 取：全局子树搜索会静默抓到第一个子形状的 xfrm，造成子元素双重偏移
   const grpSpPr = directChild(grpSp, 'p:grpSpPr')
   const xfrm = grpSpPr ? directChild(grpSpPr, 'a:xfrm') : null
+  // 子元素 a:grpFill / 组合阴影继承（组合填充在子空间，子元素按同一坐标系取样）
+  const childCtx = groupChildContext(grpSpPr, ctx)
   const g = svgEl('g')
   if (xfrm) {
     const off = directChild(xfrm, 'a:off')
@@ -40,7 +43,7 @@ export async function renderGroup(grpSp: Element, ctx: PreviewCtx): Promise<SVGE
     }
   }
   for (const child of Array.from(grpSp.children)) {
-    g.append(...(await renderSpTreeNode(child, ctx)))
+    g.append(...(await renderSpTreeNode(child, childCtx)))
   }
   return g.children.length ? g : null
 }

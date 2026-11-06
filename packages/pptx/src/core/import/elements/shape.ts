@@ -15,7 +15,7 @@ import { frameRotOf, mapEmuBox } from './frame-geom'
 import type { GroupXform, ParseContext } from '../context'
 import type { PptxPackage } from '../package'
 import type {
-  Gradient, LineElement, PPTElement, ShapeElement, ShadowEffect, TextElement,
+  Gradient, ImageElement, LineElement, PPTElement, ShapeElement, ShadowEffect, TextElement,
 } from '../../../types/slides'
 
 /** EMU→px（96dpi） */
@@ -109,6 +109,32 @@ function alignFromAlgn(algn: string | null): 'left' | 'center' | 'right' {
   return algn === 'ctr' ? 'center' : algn === 'r' ? 'right' : 'left'
 }
 
+/** 十万分之一比例保留 5 位小数（消除浮点噪声） */
+function round5(v: number): number {
+  return Math.round(v * 100000) / 100000
+}
+
+/** a:srcRect（十万分之一比例）→ 图片裁剪矩形；全零返回 undefined */
+function srcRectClip(srcRect: Element | null): ImageElement['clip'] | undefined {
+  if (!srcRect) return undefined
+  const l = parseInt(attr(srcRect, 'l') ?? '0', 10) / 100000
+  const t = parseInt(attr(srcRect, 't') ?? '0', 10) / 100000
+  const r = parseInt(attr(srcRect, 'r') ?? '0', 10) / 100000
+  const b = parseInt(attr(srcRect, 'b') ?? '0', 10) / 100000
+  if (!l && !t && !r && !b) return undefined
+  return { x: round5(l), y: round5(t), w: round5(Math.max(0, 1 - l - r)), h: round5(Math.max(0, 1 - t - b)) }
+}
+
+/** a:blipFill → 媒体 data URL（SVG 矢量替代优先；缺失/不可读返回 undefined） */
+export async function blipFillSrc(blipFill: Element, ctx: ParseContext): Promise<string | undefined> {
+  const blip = directChild(blipFill, 'a:blip')
+  const svgBlip = blip ? (firstDescendant(blip, 'asvg:svgBlip') ?? firstDescendant(blip, 'svgBlip')) : null
+  const embedId = attr(svgBlip, 'r:embed') ?? attr(blip, 'r:embed')
+  if (!embedId) return undefined
+  const path = await ctx.pkg.relTarget(ctx.partPath, embedId)
+  return path ? ctx.pkg.mediaDataUrl(path) : undefined
+}
+
 /** p:sp / p:cxnSp 解析；xf 为组合变换（EMU 空间） */
 export async function parseShapeEl(
   node: Element,
@@ -184,6 +210,62 @@ export async function parseShapeEl(
   const shadow = parseShadow(effectLst, ctx, effectPh)
   reportUnsupportedEffects(effectLst, ctx)
 
+  // a:grpFill：填充继承自最近祖先组合（图片填充还原为图片 + 裁剪；纯色/渐变走下方常规分支）
+  const grpFill = fillEl?.localName === 'grpFill' ? ctx.groupFill : undefined
+  const imageFillEl = fillEl?.localName === 'blipFill'
+    ? fillEl
+    : grpFill?.fill.localName === 'blipFill' ? grpFill.fill : null
+
+  // 图片填充形状（SmartArt 照片节点、圆形头像、组合纹理填充等）：按图片 + 形状裁剪还原，避免退化成主题色块
+  if (imageFillEl) {
+    const src = await blipFillSrc(imageFillEl, ctx)
+    if (src) {
+      const image: ImageElement = {
+        id: genId('i-'), type: 'image', x, y, w, h, src,
+        name: altText ?? '图片',
+        flipH: flipH || undefined,
+        flipV: flipV || undefined,
+      }
+      if (link) image.link = link
+      if (rot) image.rotate = Math.round(rot)
+      let clip = grpFill && imageFillEl === grpFill.fill
+        ? {
+            x: round5((emuX - grpFill.box.x) / grpFill.box.w),
+            y: round5((emuY - grpFill.box.y) / grpFill.box.h),
+            w: round5(emuW / grpFill.box.w),
+            h: round5(emuH / grpFill.box.h),
+          }
+        : undefined
+      const ownClip = srcRectClip(directChild(imageFillEl, 'a:srcRect'))
+      if (ownClip) {
+        // 组合填充区域与源图 srcRect 叠加：先取组合子区，再在其中取 srcRect
+        clip = clip
+          ? {
+              x: round5(clip.x + ownClip.x * clip.w),
+              y: round5(clip.y + ownClip.y * clip.h),
+              w: round5(ownClip.w * clip.w),
+              h: round5(ownClip.h * clip.h),
+            }
+          : ownClip
+      }
+      if (clip) image.clip = clip
+      const blip = directChild(imageFillEl, 'a:blip')
+      const alphaFix = blip ? directChild(blip, 'a:alphaModFix') : null
+      if (alphaFix) {
+        const amt = parseInt(attr(alphaFix, 'amt') ?? '100000', 10) / 100000
+        if (Number.isFinite(amt) && amt < 1) image.opacity = Math.max(0, amt)
+      }
+      if (prst && getShapeKey(prst) !== 'rect') image.clipShape = getShapeKey(prst)
+      if (shadow) image.shadow = shadow
+      if (ln && !directChild(ln, 'a:noFill')) {
+        const color = resolveColor(directChild(ln, 'a:solidFill'), ctx.theme)
+        if (color) image.outline = { color, width: Math.max(1, Math.round(emu2px(parseInt(attr(ln, 'w') ?? '0', 10)))), style: dashOf(ln) }
+      }
+      return image
+    }
+    addSkipped(ctx.report, 'missingImage')
+  }
+
   // 连接线
   if (node.localName === 'cxnSp' || prst === 'line' || prst === 'straightConnector1') {
     const cxnLnRef = styleRef ? directChild(styleRef, 'a:lnRef') : null
@@ -243,11 +325,22 @@ export async function parseShapeEl(
 
   // 纯文本框：rect/textbox 且无填充无边框（noFill 视为无填充，与旧实现兼容；a:ln 内 a:noFill
   // 即 PowerPoint 文本框的标准「无边框线」声明，同样视为无边框——此类框需走文本分支保留
-  // insets/spAutoFit/富文本，落入形状分支会被降级为纯文本且丢失垂直内边距）；带实体边框的走形状分支
+  // insets/spAutoFit/富文本，落入形状分支会被降级为纯文本且丢失垂直内边距）；带实体边框的走形状分支。
+  // a:ln 仅含 a:miter 等连接属性、没有任何 paint 子节点时同样是无边框（PowerPoint 中不描边，
+  // 常见于直接绘制的标题文本框）；此类框若按形状分支渲染会垂直居中裁切多行文字
   const lnNoFill = ln ? Boolean(directChild(ln, 'a:noFill')) : false
-  if (node.localName === 'sp' && (prst === 'rect' || prst === 'textbox' || (!prst && !custGeom)) && txBody && !solidFill && !gradFill && (!ln || lnNoFill)) {
-    const body = await txBodyToHTML(txBody, ctx.theme, pkg, ctx.partPath, inherited)
-    const inheritedDef = defRPrOf(inherited?.lstStyle ?? null, 0)
+  const lnPaintless = !!ln && !directChild(ln, 'a:solidFill') && !directChild(ln, 'a:gradFill') && !directChild(ln, 'a:pattFill')
+  if (node.localName === 'sp' && (prst === 'rect' || prst === 'textbox' || (!prst && !custGeom)) && txBody && !solidFill && !gradFill && (!ln || lnNoFill || (lnPaintless && !styleRef))) {
+    const body = await txBodyToHTML(txBody, ctx.theme, pkg, ctx.partPath, inherited, {
+      flatBullets: hasListStructure(txBody),
+      scale: ctx.scale.x,
+      defaultSz: defaultSzOf(ctx),
+    })
+    const lstDef = defRPrOf(directChild(txBody, 'a:lstStyle') ?? inherited?.lstStyle ?? null, 0)
+    const firstP0 = firstDescendant(txBody, 'a:p')
+    const pPr0 = firstP0 ? directChild(firstP0, 'a:pPr') : null
+    const pDef = pPr0 ? directChild(pPr0, 'a:defRPr') : null
+    const inheritedDef = pDef ?? lstDef
     const inheritedColor = resolveColor(inheritedDef ? directChild(inheritedDef, 'a:solidFill') : null, ctx.theme)
     const text: TextElement = {
       id: genId('t-'), type: 'text', x, y, w, h,
@@ -294,7 +387,9 @@ export async function parseShapeEl(
   const lnPh = refColor(lnRef)
 
   let fill: string | Gradient | undefined
-  if (gradFill) fill = parseGradient(gradFill, ctx)
+  if (grpFill && grpFill.fill.localName === 'solidFill') fill = resolveColor(grpFill.fill, ctx.theme) ?? '#00000000'
+  else if (grpFill && grpFill.fill.localName === 'gradFill') fill = parseGradient(grpFill.fill, ctx)
+  else if (gradFill) fill = parseGradient(gradFill, ctx)
   else if (noFill) fill = '#00000000'
   else if (solidFill) fill = resolveColor(solidFill, ctx.theme) ?? '#00000000'
   else if (fillRef && fillIdx > 0) {
@@ -346,7 +441,14 @@ export async function parseShapeEl(
 
   // 形状内文本（首段样式近似）
   if (txBody) {
-    const body = await txBodyToHTML(txBody, ctx.theme, pkg, ctx.partPath, inherited)
+    // 含项目符号/编号或段落缩进的文本纯文本渲染会丢失符号、颜色与悬挂缩进（如 SmartArt 卡片），
+    // 额外产出扁平列表 HTML 供画布优先渲染
+    const richText = hasListStructure(txBody)
+    const body = await txBodyToHTML(txBody, ctx.theme, pkg, ctx.partPath, inherited, {
+      flatBullets: richText,
+      scale: ctx.scale.x,
+      defaultSz: defaultSzOf(ctx),
+    })
     // HTML → 纯文本：剥标签后须清理空段填充的 &nbsp; 并解码其余实体（escapeHTML 的 &amp;/&lt;/&gt; 等），
     // 否则画布按纯文本渲染会字面显示 "&nbsp;"；空行折叠 + trim 后保留段间换行（渲染层 whitespace-pre-wrap）
     const plain = decodeHTMLText(body.html
@@ -355,10 +457,18 @@ export async function parseShapeEl(
       .replace(/&nbsp;/g, '')).replace(/\n{2,}/g, '\n').trim()
     if (plain) {
       shape.text = plain
-      // 首 run 样式（a:r 优先，纯 a:fld 段落也可取）；显式属性缺失时回退 lstStyle defRPr 默认值
+      if (richText) {
+        shape.textHtml = body.html
+        shape.textInsets = bodyInsets(txBody, ctx.scale.x)
+      }
+      // 首 run 样式（a:r 优先，纯 a:fld 段落也可取）；显式属性缺失时回退首段 defRPr → lstStyle defRPr
       const firstRun = firstDescendant(txBody, 'a:r') ?? firstDescendant(txBody, 'a:fld')
       const rPr = firstRun ? firstDescendant(firstRun, 'a:rPr') : null
-      const defRPr = defRPrOf(directChild(txBody, 'a:lstStyle') ?? inherited?.lstStyle ?? null, 0)
+      const firstP = firstDescendant(txBody, 'a:p')
+      const firstPPr = firstP ? directChild(firstP, 'a:pPr') : null
+      const pDefRPr = firstPPr ? directChild(firstPPr, 'a:defRPr') : null
+      const lstDefRPr = defRPrOf(directChild(txBody, 'a:lstStyle') ?? inherited?.lstStyle ?? null, 0)
+      const defRPr = pDefRPr ?? lstDefRPr
       shape.defaultColor = resolveColor(
         (rPr ? directChild(rPr, 'a:solidFill') : null) ?? (defRPr ? directChild(defRPr, 'a:solidFill') : null),
         ctx.theme,
@@ -369,12 +479,11 @@ export async function parseShapeEl(
         if (face) shape.defaultFontName = fontStackOf(face, face, ctx.theme)
       }
       const sz = (rPr ? attr(rPr, 'sz') : null) ?? (defRPr ? attr(defRPr, 'sz') : null)
-      if (sz) shape.fontSize = Math.round(parseInt(sz, 10) / 100 / 0.75)
+      shape.fontSize = Math.round(((sz ? parseInt(sz, 10) : defaultSzOf(ctx)) / 100 / 0.75) * ctx.scale.x)
       // 首 run 字体栈（latin + ea，含 +mj/+mn 主题引用解析）
       const latin = attr((rPr ? directChild(rPr, 'a:latin') : null) ?? (defRPr ? directChild(defRPr, 'a:latin') : null), 'typeface')
       const ea = attr((rPr ? directChild(rPr, 'a:ea') : null) ?? (defRPr ? directChild(defRPr, 'a:ea') : null), 'typeface')
       if (latin || ea) shape.defaultFontName = fontStackOf(latin, ea, ctx.theme)
-      const firstP = firstDescendant(txBody, 'a:p')
       // 段落显式 pPr@algn 缺失时回退 lstStyle lvl1pPr@algn（叠加文本框常只有 lstStyle 声明居中）
       const firstAlgn = (firstP ? attr(directChild(firstP, 'a:pPr'), 'algn') : null)
         ?? lstAlgnOf(directChild(txBody, 'a:lstStyle') ?? inherited?.lstStyle ?? null, 0)
@@ -390,6 +499,37 @@ export async function parseShapeEl(
 /** 未识别的 shape 特性统一在此报告 */
 export function skipShape(ctx: ParseContext, reason: string): void {
   addSkipped(ctx.report, reason)
+}
+
+/** presentation defaultTextStyle 的段落默认字号（1/100 pt；缺省 18pt） */
+function defaultSzOf(ctx: ParseContext): number {
+  return parseInt(attr(defRPrOf(ctx.defaultTextStyle ?? null, 0), 'sz') ?? '1800', 10)
+}
+
+/** bodyPr 四向 insets（EMU→px；OOXML 默认 l/r=91440、t/b=45720） */
+function bodyInsets(txBody: Element, scale: number): { t: number; b: number; l: number; r: number } {
+  const bodyPr = directChild(txBody, 'a:bodyPr')
+  const px = (name: string, fallback: number): number =>
+    Math.round((parseInt(attr(bodyPr, name) ?? String(fallback), 10) / 9525) * scale * 100) / 100
+  return {
+    t: px('tIns', 45720),
+    b: px('bIns', 45720),
+    l: px('lIns', 91440),
+    r: px('rIns', 91440),
+  }
+}
+
+/** txBody 是否声明了列表结构（项目符号/自动编号/段落缩进） */
+function hasListStructure(txBody: Element): boolean {
+  for (const p of directChildren(txBody, 'a:p')) {
+    const pPr = directChild(p, 'a:pPr')
+    if (!pPr) continue
+    if (directChild(pPr, 'a:buChar') || directChild(pPr, 'a:buAutoNum')) return true
+    const marL = parseInt(attr(pPr, 'marL') ?? '0', 10)
+    const indent = parseInt(attr(pPr, 'indent') ?? '0', 10)
+    if (marL !== 0 || indent !== 0) return true
+  }
+  return false
 }
 
 /** 解码 HTML 实体（&amp;/&lt;/&gt;/&quot;/&#39; 等）：借助 text/html 解析器的文本语义 */

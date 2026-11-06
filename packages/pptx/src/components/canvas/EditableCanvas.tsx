@@ -498,7 +498,10 @@ export function EditableCanvas() {
           onEditChange={(id, html) => {
             useEditorStore.getState().updateElements([id], (target) => {
               if (target.type === 'text') target.content = html
-              else if (target.type === 'shape') target.text = html.replace(/<[^>]+>/g, '')
+              else if (target.type === 'shape') {
+                target.text = html.replace(/<[^>]+>/g, '')
+                if (target.textHtml) target.textHtml = html
+              }
             }, { history: false })
           }}
           editingCellId={editingCellId}

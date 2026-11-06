@@ -140,6 +140,39 @@ describe('parseGroupEl（经 parseSpTreeNode 分发）', () => {
     expect(report.skipped.groupRotation).toBeUndefined()
   })
 
+  it('组合填充：子元素 a:grpFill 继承组合 solidFill', async () => {
+    const zip = new JSZip()
+    zip.file('ppt/slides/slide1.xml', `<p:sld xmlns:p="urn:p"/>`)
+    const pkg = await PptxPackage.load(await zip.generateAsync({ type: 'blob' }))
+    const ctx = {
+      pkg,
+      partPath: 'ppt/slides/slide1.xml',
+      theme,
+      report: { skipped: {} } as ImportReport,
+      scale: { x: 1, y: 1 },
+      placeholders: new Map(),
+    }
+    const grp = el(`<p:grpSp xmlns:p="urn:p" xmlns:a="urn:a">
+      <p:nvGrpSpPr><p:cNvPr id="1" name="组"/></p:nvGrpSpPr>
+      <p:grpSpPr>
+        <a:xfrm><a:off x="0" y="0"/><a:ext cx="1000000" cy="1000000"/><a:chOff x="0" y="0"/><a:chExt cx="1000000" cy="1000000"/></a:xfrm>
+        <a:solidFill><a:srgbClr val="FF6600"/></a:solidFill>
+      </p:grpSpPr>
+      <p:sp>
+        <p:nvSpPr><p:cNvPr id="2" name="子矩形"/></p:nvSpPr>
+        <p:spPr>
+          <a:xfrm><a:off x="0" y="0"/><a:ext cx="500000" cy="500000"/></a:xfrm>
+          <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+          <a:grpFill/>
+        </p:spPr>
+      </p:sp>
+    </p:grpSp>`)
+    const els = await parseSpTreeNode(grp, ctx, IDENTITY_XFORM, pkg)
+    const shape = els[0]
+    if (shape.type !== 'shape') throw new Error('expected shape')
+    expect(shape.fill).toBe('#FF6600')
+  })
+
   it('组合翻转：子元素位置镜像并标记 flipH', async () => {
     const zip = new JSZip()
     zip.file('ppt/slides/slide1.xml', `<p:sld xmlns:p="urn:p"/>`)

@@ -124,6 +124,8 @@ function ImageItem({ el }: { el: ImageElement }) {
   }
   if (el.clipShape) {
     const meta = getShapePath(el.clipShape)
+    // 裁剪区域 + 形状裁剪叠加：图片按 clip 放大后放进 0-100 视口，再由形状 path 裁边
+    const { x, y, w: cw, h: ch } = el.clip ?? { x: 0, y: 0, w: 1, h: 1 }
     return (
       <div className="relative size-full" style={{ filter: shadow ? `drop-shadow(${shadow})` : undefined }}>
         <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="size-full" style={{ transform: `scale(${el.flipH ? -1 : 1},${el.flipV ? -1 : 1})` }}>
@@ -137,9 +139,11 @@ function ImageItem({ el }: { el: ImageElement }) {
           </defs>
           <image
             href={el.src}
-            width="100"
-            height="100"
-            preserveAspectRatio="xMidYMid slice"
+            x={(-x * 100) / cw}
+            y={(-y * 100) / ch}
+            width={100 / cw}
+            height={100 / ch}
+            preserveAspectRatio={el.clip ? 'none' : 'xMidYMid slice'}
             clipPath={`url(#clipu-${el.id})`}
           />
         </svg>
@@ -216,15 +220,22 @@ function ShapeItem({
           strokeLinejoin="round"
         />
       </svg>
-      {(el.text || editing) && (
+      {(el.textHtml || el.text || editing) && (
         <div
           className={`absolute inset-0 flex overflow-hidden whitespace-pre-wrap break-words px-1 ${editing ? 'pptx-richtext-editor pptx-shape-text-editor cursor-text' : 'select-none'}`}
-          style={textLayerStyle}
+          style={el.textHtml && el.textInsets
+            ? {
+                ...textLayerStyle,
+                padding: `${el.textInsets.t}px ${el.textInsets.r}px ${el.textInsets.b}px ${el.textInsets.l}px`,
+              }
+            : textLayerStyle}
           data-align={align}
           data-valign={valign}
         >
           {editing && onChange ? (
-            <RichTextEditor elementId={el.id} initialHTML={shapeTextToHTML(el.text)} onChange={onChange} />
+            <RichTextEditor elementId={el.id} initialHTML={el.textHtml ?? shapeTextToHTML(el.text)} onChange={onChange} />
+          ) : el.textHtml ? (
+            <div className="pptx-text-html w-full" dangerouslySetInnerHTML={{ __html: el.textHtml }} />
           ) : (
             el.text
           )}

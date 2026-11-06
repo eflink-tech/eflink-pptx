@@ -8,6 +8,7 @@ export const PRST_MAP: Record<string, string> = {
   rect: 'rect', roundRect: 'roundRect', round1Rect: 'roundRect', round2SameRect: 'roundRect',
   round2DiagRect: 'roundRect', snip1Rect: 'rect', snip2SameRect: 'rect', snip2DiagRect: 'rect',
   snipRoundRect: 'roundRect', ellipse: 'ellipse', triangle: 'triangle', rtTriangle: 'rtTriangle',
+  diamond: 'diamond',
   parallelogram: 'parallelogram', trapezoid: 'trapezoid', nonIsoscelesTrapezoid: 'trapezoid',
   pentagon: 'pentagon', hexagon: 'hexagon', heptagon: 'heptagon', octagon: 'octagon',
   decagon: 'octagon', dodecagon: 'octagon',

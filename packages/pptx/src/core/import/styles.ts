@@ -57,6 +57,17 @@ function rgbToHex(r: number, g: number, b: number): string {
   return `#${[r, g, b].map((v) => clampByte(v).toString(16).padStart(2, '0').toUpperCase()).join('')}`
 }
 
+/** sRGB 分量（0-255）→ 线性光强（0-1）：shade/tint 在 linear RGB 空间计算，与 PowerPoint 一致 */
+function srgbToLinear(v: number): number {
+  const c = v / BYTE
+  return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+}
+
+function linearToSrgb(v: number): number {
+  const c = Math.min(1, Math.max(0, v))
+  return (c <= 0.0031308 ? c * 12.92 : 1.055 * c ** (1 / 2.4) - 0.055) * BYTE
+}
+
 function hexToRgb(hex: string): [number, number, number] {
   return [
     parseInt(hex.slice(1, 3), 16),
@@ -165,8 +176,10 @@ export function resolveColorOf(clrEl: Element, theme: PptxTheme, phColor?: Eleme
         break
       }
       case 'hueOff': {
+        // ST_Angle：1/60000 度；换算为色相环比例（360° = 1）
+        const shift = parseInt(modEl.getAttribute('val') ?? '0', 10) / 21600000
         const [h, s, l] = rgbToHsl(r, g, b)
-        ;[r, g, b] = hslToRgb((((h + val) % 1) + 1) % 1, s, l)
+        ;[r, g, b] = hslToRgb((((h + shift) % 1) + 1) % 1, s, l)
         break
       }
       case 'red': r = val * BYTE; break
@@ -178,8 +191,18 @@ export function resolveColorOf(clrEl: Element, theme: PptxTheme, phColor?: Eleme
       case 'blue': b = val * BYTE; break
       case 'blueMod': b *= val; break
       case 'blueOff': b += val * BYTE; break
-      case 'shade': r *= val; g *= val; b *= val; break
-      case 'tint': r += (BYTE - r) * (1 - val); g += (BYTE - g) * (1 - val); b += (BYTE - b) * (1 - val); break
+      case 'shade': {
+        r = linearToSrgb(srgbToLinear(r) * val)
+        g = linearToSrgb(srgbToLinear(g) * val)
+        b = linearToSrgb(srgbToLinear(b) * val)
+        break
+      }
+      case 'tint': {
+        // 向白色混合也在线性空间进行：c' = c + (1 - c) × (1 - val)
+        const mix = (c: number) => linearToSrgb(srgbToLinear(c) + (1 - srgbToLinear(c)) * (1 - val))
+        r = mix(r); g = mix(g); b = mix(b)
+        break
+      }
       case 'comp': {
         const [h, s, l] = rgbToHsl(r, g, b)
         ;[r, g, b] = hslToRgb((h + 0.5) % 1, s, l)

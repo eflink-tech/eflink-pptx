@@ -61,6 +61,8 @@ export async function listSlidePaths(
   hidden: boolean[]
   /** 与 paths 对齐：分节名（p14:sectionLst，无分节为 undefined） */
   sections: (string | undefined)[]
+  /** p:defaultTextStyle：run 未声明字号时的默认字号来源 */
+  defaultTextStyle: Element | null
 }> {
   const presXml = await pkg.text('ppt/presentation.xml')
   if (!presXml) throw new Error('不是有效的 PPTX 文件（缺少 presentation.xml）')
@@ -95,13 +97,13 @@ export async function listSlidePaths(
   const sections = entries.length
     ? entries.map((e) => sectionMap.get(attr(e.id, 'id') ?? '') ?? undefined)
     : paths.map(() => undefined)
-  return { paths, srcW, srcH, ratio, hidden, sections }
+  return { paths, srcW, srcH, ratio, hidden, sections, defaultTextStyle: firstDescendant(root, 'p:defaultTextStyle') }
 }
 
 /** 解析 pptx → Presentation + 兼容性报告 */
 export async function importPPTXDetailed(file: File): Promise<ImportResult> {
   const pkg = await PptxPackage.load(file)
-  const { paths, srcW, srcH, ratio, hidden, sections } = await listSlidePaths(pkg)
+  const { paths, srcW, srcH, ratio, hidden, sections, defaultTextStyle } = await listSlidePaths(pkg)
   const scale = { x: 1280 / (srcW / 9525), y: (1280 / ratio) / (srcH / 9525) }
 
   const report: ImportReport = { skipped: {} }
@@ -134,6 +136,7 @@ export async function importPPTXDetailed(file: File): Promise<ImportResult> {
         placeholderShapes: ancestry.placeholderShapes,
         masterTextStyles: ancestry.masterTextStyles,
         slideSize: { w: srcW, h: srcH },
+        defaultTextStyle: defaultTextStyle ?? undefined,
         slideIdByPath,
       }
 

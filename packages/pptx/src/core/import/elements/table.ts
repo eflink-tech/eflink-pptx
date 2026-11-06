@@ -23,7 +23,7 @@ function cellTextOf(tc: Element): string {
 }
 
 /** 单元格显式样式（仅提取源文件声明的属性，表格样式层叠与默认值由调用方补齐） */
-function cellStyleOf(tc: Element, theme: PptxTheme): NonNullable<TableCell['style']> {
+function cellStyleOf(tc: Element, theme: PptxTheme, scale = 1): NonNullable<TableCell['style']> {
   const style: NonNullable<TableCell['style']> = {}
   const txBody = firstDescendant(tc, 'a:txBody')
   const firstRun = txBody ? firstDescendant(txBody, 'a:r') : null
@@ -35,7 +35,7 @@ function cellStyleOf(tc: Element, theme: PptxTheme): NonNullable<TableCell['styl
     const color = resolveColor(directChild(rPr, 'a:solidFill'), theme)
     if (color) style.color = color
     const sz = attr(rPr, 'sz')
-    if (sz) style.fontsize = Math.round(parseInt(sz, 10) / 100 / 0.75)
+    if (sz) style.fontsize = Math.round((parseInt(sz, 10) / 100 / 0.75) * scale)
     const latin = attr(directChild(rPr, 'a:latin'), 'typeface')
     const ea = attr(directChild(rPr, 'a:ea'), 'typeface')
     if (latin || ea) style.fontface = fontStackOf(latin ?? '+mn-lt', ea ?? '+mn-ea', theme)
@@ -84,7 +84,7 @@ function cellStyleOf(tc: Element, theme: PptxTheme): NonNullable<TableCell['styl
 /** a:tbl → cells 矩阵（合并原点带 colspan/rowspan，被并格为 null）；
  * tcEls 为对应源 a:tc 元素矩阵（预览层富文本用），与 cells 逐位同步，改动 cells 逻辑时必须同步维护：
  * 普通格=元素，合并占位/覆盖区=null */
-export function buildCellMatrix(tbl: Element, theme: PptxTheme, tblStyle?: ResolvedTableStyle): {
+export function buildCellMatrix(tbl: Element, theme: PptxTheme, tblStyle?: ResolvedTableStyle, scale = 1): {
   cells: Array<Array<TableCell | null>>
   tcEls: Array<Array<Element | null>>
 } {
@@ -113,7 +113,7 @@ export function buildCellMatrix(tbl: Element, theme: PptxTheme, tblStyle?: Resol
       while (occupied[r][c]) c += 1
       const colspan = parseInt(attr(tc, 'gridSpan') ?? '1', 10) || 1
       const rowspan = parseInt(attr(tc, 'rowSpan') ?? '1', 10) || 1
-      const style = cellStyleOf(tc, theme)
+      const style = cellStyleOf(tc, theme, scale)
       // 表格样式层叠（低→高，后者覆盖前者）：wholeTbl < band < first/last Row/Col；
       // 合成结果仅补单元格未显式声明的属性（tcPr 填充 / run 样式始终最高优先）
       if (tblStyle) {
@@ -228,7 +228,7 @@ export async function parseTableEl(
   const rowSizesRaw = sizesWithFallback(trs.map((tr) => parseInt(attr(tr, 'h') ?? '0', 10)))
   const rowTotal = rowSizesRaw.reduce((a, b) => a + b, 0) || 1
 
-  const { cells, tcEls } = buildCellMatrix(tbl, ctx.theme, tblStyle)
+  const { cells, tcEls } = buildCellMatrix(tbl, ctx.theme, tblStyle, ctx.scale.x)
   // 模型限制：单元格只存单一文本与单一边框；富文本/四边不一致在此如实报告
   let rich = 0
   let edgeMismatch = false

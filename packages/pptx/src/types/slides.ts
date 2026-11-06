@@ -156,8 +156,12 @@ export interface ShapeElement extends ElementBase {
   flipH?: boolean
   flipV?: boolean
   shadow?: ShadowEffect
-  /** 形状内嵌文本 */
+  /** 形状内嵌文本（纯文本，编辑/导出用） */
   text?: string
+  /** 形状内嵌富文本 HTML（项目符号/多色 run 等纯文本无法表达的结构；渲染优先于 text） */
+  textHtml?: string
+  /** 富文本内边距（bodyPr insets，px），仅 textHtml 渲染时生效 */
+  textInsets?: { t: number; b: number; l: number; r: number }
   defaultColor?: string
   defaultFontName?: string
   fontSize?: number

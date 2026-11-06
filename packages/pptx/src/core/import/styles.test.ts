@@ -36,9 +36,12 @@ describe('styles.resolveColor', () => {
     expect(resolveColor(el(`<a:solidFill xmlns:a="urn:a"><a:schemeClr val="lt1"><a:lumMod val="75000"/></a:schemeClr></a:solidFill>`), theme)).toBe('#BFBFBF')
   })
 
-  it('tint/shade 近似', () => {
-    // shade 50% 黑色不变、白色减半
-    expect(resolveColor(el(`<a:solidFill xmlns:a="urn:a"><a:srgbClr val="FFFFFF"><a:shade val="50000"/></a:srgbClr></a:solidFill>`), theme)).toBe('#808080')
+  it('tint/shade 在线性 RGB 空间计算（与 PowerPoint 一致）', () => {
+    // shade 50%：线性光强减半后回到 sRGB，白色 → #BCBCBC
+    expect(resolveColor(el(`<a:solidFill xmlns:a="urn:a"><a:srgbClr val="FFFFFF"><a:shade val="50000"/></a:srgbClr></a:solidFill>`), theme)).toBe('#BCBCBC')
+    // 实证：accent1 #5B9BD5 shade 50% → #41719C（幻灯片圆环颜色）
+    const shadeTheme: PptxTheme = { ...theme, schemeColors: { ...theme.schemeColors, accent1: '#5B9BD5' } }
+    expect(resolveColor(el(`<a:solidFill xmlns:a="urn:a"><a:schemeClr val="accent1"><a:shade val="50000"/></a:schemeClr></a:solidFill>`), shadeTheme)).toBe('#41719C')
   })
 
   it('alpha 与 lumMod 组合（顺序无关）：先亮度变换再叠加 alpha', () => {
@@ -84,8 +87,8 @@ describe('styles.resolveColor', () => {
   })
 
   it('hueOff/satOff：色相旋转与饱和度偏移', () => {
-    // 纯红 hueOff 120° → 纯绿（HSL 往返允许 1 通道误差）
-    const green = resolveColor(el(`<a:solidFill xmlns:a="urn:a"><a:srgbClr val="FF0000"><a:hueOff val="33333"/></a:srgbClr></a:solidFill>`), theme)!
+    // 纯红 hueOff 120° → 纯绿（ST_Angle 1/60000 度：120° = 7200000；HSL 往返允许 1 通道误差）
+    const green = resolveColor(el(`<a:solidFill xmlns:a="urn:a"><a:srgbClr val="FF0000"><a:hueOff val="7200000"/></a:srgbClr></a:solidFill>`), theme)!
     const [, g1] = hexToChannels(green)
     expect(g1).toBeGreaterThan(250)
     // satMod 0 → 去饱和为灰（亮度不变）

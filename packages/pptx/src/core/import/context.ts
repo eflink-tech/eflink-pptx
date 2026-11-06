@@ -23,8 +23,12 @@ export interface ParseContext {
   masterTextStyles?: { title?: Element; body?: Element; other?: Element }
   /** 幻灯片尺寸（EMU），占位符几何缺失时用于兜底定位 */
   slideSize?: { w: number; h: number }
+  /** presentation.xml 的 p:defaultTextStyle（run 未声明字号时的段落默认字号来源） */
+  defaultTextStyle?: Element
   /** 包内 slide 部件路径 → 导入后的 slide id（内部超链接解析） */
   slideIdByPath?: Map<string, string>
+  /** 组合级填充继承：最近祖先组合 p:grpSpPr 的填充，box 为该填充在子空间（EMU）覆盖的区域 */
+  groupFill?: { fill: Element; box: { x: number; y: number; w: number; h: number } }
 }
 
 /** 记录一类降级/丢弃项 */

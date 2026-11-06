@@ -270,6 +270,41 @@ describe('parseShapeEl', () => {
     expect(result.autoSize).toBeUndefined()
   })
 
+  it('列表文本（SmartArt 卡片）：textHtml 扁平项目符号 + 红色 run + 缩放悬挂缩进', async () => {
+    const xml = `<?xml version="1.0"?>
+<p:sld xmlns:p="urn:p" xmlns:a="urn:a"><p:cSld><p:spTree>
+  <p:sp>
+    <p:nvSpPr><p:cNvPr id="2" name="Card"/></p:nvSpPr>
+    <p:spPr>
+      <a:xfrm><a:off x="0" y="0"/><a:ext cx="1172149" cy="874985"/></a:xfrm>
+      <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+      <a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill>
+    </p:spPr>
+    <p:txBody><a:bodyPr lIns="7620" tIns="22860" rIns="7620" bIns="7620" anchor="t"/>
+      <a:p><a:pPr marL="57150" lvl="1" indent="-57150" algn="l"><a:buChar char="•"/></a:pPr>
+        <a:r><a:rPr sz="600"/><a:t>关键词：</a:t></a:r>
+        <a:r><a:rPr sz="600"><a:solidFill><a:srgbClr val="C00000"/></a:solidFill></a:rPr><a:t>重点</a:t></a:r>
+      </a:p>
+    </p:txBody>
+  </p:sp>
+</p:spTree></p:cSld></p:sld>`
+    const { pkg, ctx } = await makeCtx(xml)
+    ctx.scale = { x: 4 / 3, y: 4 / 3 }
+    const sp = el(xml).getElementsByTagName('p:sp')[0]
+    const result = await parseShapeEl(sp, ctx, IDENTITY_XFORM, pkg)
+    if (result?.type !== 'shape') throw new Error('expected shape')
+    expect(result.textHtml).toContain('display:inline-block;width:8px;text-indent:0">•</span>')
+    expect(result.textHtml).toContain('color:#C00000')
+    // 悬挂缩进随画布缩放：57150 EMU → 6px × 4/3 = 8px
+    expect(result.textHtml).toContain('margin-left:8px')
+    expect(result.textHtml).toContain('text-indent:-8px')
+    expect(result.textHtml).toContain('font-size:10.67px')
+    expect(result.textInsets?.l).toBeCloseTo(1.07, 2)
+    expect(result.fontSize).toBe(11)
+    // 纯文本保留给编辑/导出
+    expect(result.text).toContain('关键词：重点')
+  })
+
   it('占位符继承：无 xfrm 时从 placeholders 取位置折算 px', async () => {
     const xml = `<?xml version="1.0"?>
 <p:sld xmlns:p="urn:p" xmlns:a="urn:a"><p:cSld><p:spTree>

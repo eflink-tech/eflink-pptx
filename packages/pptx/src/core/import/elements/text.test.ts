@@ -225,13 +225,14 @@ describe('txBodyToHTML 字距与行距', () => {
     expect(r.html).toContain('letter-spacing:4px') // 300/100/0.75 = 4
   })
 
-  it('a:lnSpc a:spcPct → line-height 倍数', async () => {
+  it('a:lnSpc a:spcPct → line-height 倍数（单倍行距≈1.2em）', async () => {
     const txBody = el(`<p:txBody xmlns:p="urn:p" xmlns:a="urn:a">
       <a:bodyPr/>
       <a:p><a:pPr><a:lnSpc><a:spcPct val="150000"/></a:lnSpc></a:pPr><a:r><a:rPr lang="zh-CN"/><a:t>x</a:t></a:r></a:p>
     </p:txBody>`)
     const r = await txBodyToHTML(txBody, theme)
-    expect(r.html).toContain('line-height:1.5')
+    // PowerPoint 的 150% 是相对单倍行距，CSS 需 ×1.2
+    expect(r.html).toContain('line-height:1.8')
   })
 
   it('a:lnSpc a:spcPts → line-height px', async () => {
@@ -250,7 +251,22 @@ describe('txBodyToHTML 字距与行距', () => {
     </p:txBody>`)
     const r = await txBodyToHTML(txBody, theme)
     expect(r.html).toContain('<ul>')
-    expect(r.html).toContain('<li style="text-align:left;line-height:2">')
+    expect(r.html).toContain('<li style="text-align:left;line-height:2.4">')
+  })
+
+  it('段落 defRPr 继承：字号/颜色/粗体/字距，且行距可从 lstStyle 回退', async () => {
+    const txBody = el(`<p:txBody xmlns:p="urn:p" xmlns:a="urn:a">
+      <a:lstStyle><a:lvl1pPr><a:lnSpc><a:spcPct val="90000"/></a:lnSpc></a:lvl1pPr></a:lstStyle>
+      <a:bodyPr/>
+      <a:p><a:pPr algn="r"><a:defRPr sz="3500" b="1" spc="150"><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill></a:defRPr></a:pPr><a:r><a:t>目录</a:t></a:r></a:p>
+    </p:txBody>`)
+    const r = await txBodyToHTML(txBody, theme)
+    expect(r.html).toContain('font-size:46.67px') // 35pt → 46.67px
+    expect(r.html).toContain('font-weight:bold')
+    expect(r.html).toContain('color:#FFFFFF')
+    expect(r.html).toContain('letter-spacing:2px') // 1.5pt → 2px
+    expect(r.html).toContain('line-height:1.08') // lstStyle 90% × 1.2
+    expect(r.html).toContain('text-align:right')
   })
 
   it('lnSpc val 非法/非正数时跳过，不产出 line-height', async () => {
@@ -285,6 +301,52 @@ describe('txBodyToHTML 字距与行距', () => {
     </p:txBody>`)
     const r = await txBodyToHTML(txBody, theme)
     expect(r.html).toContain('color:#4472C4')
+  })
+
+  it('scale + defaultSz：字号按画布缩放，未声明字号回退段落默认字号', async () => {
+    const txBody = el(`<p:txBody xmlns:p="urn:p" xmlns:a="urn:a">
+      <a:bodyPr/>
+      <a:p><a:r><a:rPr lang="zh-CN"/><a:t>默认字号</a:t></a:r></a:p>
+      <a:p><a:r><a:rPr sz="600"/><a:t>显式字号</a:t></a:r></a:p>
+    </p:txBody>`)
+    const r = await txBodyToHTML(txBody, theme, undefined, '', undefined, { scale: 4 / 3, defaultSz: 1300 })
+    // 13pt → 17.33px × 4/3 ≈ 23.11；6pt → 8px × 4/3 ≈ 10.67
+    expect(r.html).toContain('font-size:23.11px')
+    expect(r.html).toContain('font-size:10.67px')
+  })
+
+  it('flatBullets：项目符号作为行首字符 + 悬挂缩进（画布形状文本用）', async () => {
+    const txBody = el(`<p:txBody xmlns:p="urn:p" xmlns:a="urn:a">
+      <a:bodyPr/>
+      <a:p><a:pPr marL="57150" indent="-57150" algn="l"><a:buChar char="•"/></a:pPr>
+        <a:r><a:rPr sz="600"/><a:t>条目</a:t></a:r></a:p>
+      <a:p><a:pPr marL="57150" indent="-57150"><a:buChar char="•"/></a:pPr>
+        <a:r><a:rPr sz="600"/><a:t>次条</a:t></a:r></a:p>
+    </p:txBody>`)
+    const r = await txBodyToHTML(txBody, theme, undefined, '', undefined, { flatBullets: true, scale: 4 / 3 })
+    expect(r.html).not.toContain('<ul>')
+    expect(r.html.match(/display:inline-block;width:8px;text-indent:0">•<\/span>/g)?.length).toBe(2)
+    expect(r.html).toContain('margin-left:8px')
+    expect(r.html).toContain('text-indent:-8px')
+  })
+
+  it('flatBullets：Wingdings 符号码位映射为 ●，空符号段落跳过且编号连续', async () => {
+    const txBody = el(`<p:txBody xmlns:p="urn:p" xmlns:a="urn:a">
+      <a:bodyPr/>
+      <a:p><a:pPr marL="171450" indent="-171450"><a:buFont typeface="Wingdings"/><a:buChar char="l"/></a:pPr>
+        <a:r><a:t>圆点条目</a:t></a:r></a:p>
+      <a:p><a:pPr marL="342900" indent="-342900"><a:buFont typeface="+mj-lt"/><a:buAutoNum type="arabicPeriod"/></a:pPr>
+        <a:r><a:t>第一条</a:t></a:r></a:p>
+      <a:p><a:pPr marL="342900" indent="-342900"><a:buFont typeface="+mj-lt"/><a:buAutoNum type="arabicPeriod"/></a:pPr>
+        <a:endParaRPr/></a:p>
+      <a:p><a:pPr marL="342900" indent="-342900"><a:buFont typeface="+mj-lt"/><a:buAutoNum type="arabicPeriod"/></a:pPr>
+        <a:r><a:t>第二条</a:t></a:r></a:p>
+    </p:txBody>`)
+    const r = await txBodyToHTML(txBody, theme, undefined, '', undefined, { flatBullets: true, scale: 4 / 3 })
+    expect(r.html).toContain('>●</span>')
+    // 空段落不产出孤立序号，但编号继续计数 → 第二条为 3.
+    expect(r.html.match(/display:inline-block;width:48px;text-indent:0">3\.<\/span>/g)?.length).toBe(1)
+    expect(r.html).not.toContain('width:48px;text-indent:0">2.</span>')
   })
 })
 

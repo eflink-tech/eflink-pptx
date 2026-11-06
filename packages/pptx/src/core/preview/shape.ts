@@ -4,7 +4,7 @@ import { attr, directChild, directChildren, firstDescendant } from '../import/xm
 import { refColor, resolveColor, styleMatrixEntry } from '../import/styles'
 import { addSkipped, inheritedPlaceholderShape } from '../import/context'
 import { custGeomToPath, getShapeKey } from '../import/geometry'
-import { fontRefColor } from '../import/elements/shape'
+import { fontRefColor, blipFillSrc } from '../import/elements/shape'
 import { getShapePath } from '../render/shape'
 import { emu2pxF, svgEl, geomOf, boxTransform, type PreviewCtx } from './svg'
 import { renderText } from './text'
@@ -187,6 +187,13 @@ export async function renderShape(node: Element, ctx: PreviewCtx): Promise<SVGEl
     const noFill = fillEl?.localName === 'noFill' ? fillEl : null
     const gradFill = fillEl?.localName === 'gradFill' ? fillEl : null
     const solidFill = fillEl?.localName === 'solidFill' ? fillEl : null
+    // a:grpFill：继承最近祖先组合的填充（图片填充按组合子空间取样后由形状 path 裁剪）
+    const grpFill = fillEl?.localName === 'grpFill' ? ctx.groupFill : undefined
+    const blipFill = fillEl?.localName === 'blipFill'
+      ? fillEl
+      : grpFill?.fill.localName === 'blipFill' ? grpFill.fill : null
+    const grpSolid = grpFill?.fill.localName === 'solidFill' ? grpFill.fill : null
+    const grpGrad = grpFill?.fill.localName === 'gradFill' ? grpFill.fill : null
     const ln = groupEl('a:ln')
     const styleRef = directChild(node, 'p:style') ?? phShape?.style ?? null
     const fillRef = styleRef ? directChild(styleRef, 'a:fillRef') : null
@@ -208,7 +215,10 @@ export async function renderShape(node: Element, ctx: PreviewCtx): Promise<SVGEl
       }
     }
     let fill = 'none'
-    if (gradFill) fill = registerLinearGradient(gradFill, ctx)
+    if (blipFill) fill = 'none'
+    else if (grpSolid) fill = resolveColor(grpSolid, ctx.theme) ?? 'none'
+    else if (grpGrad) fill = registerLinearGradient(grpGrad, ctx)
+    else if (gradFill) fill = registerLinearGradient(gradFill, ctx)
     else if (noFill) fill = 'none'
     else if (solidFill) fill = resolveColor(solidFill, ctx.theme) ?? 'none'
     else if (fillIdx === 0) fill = 'none'
@@ -226,13 +236,56 @@ export async function renderShape(node: Element, ctx: PreviewCtx): Promise<SVGEl
       transform: boxTransform({ ...box, rot: 0 }),
       viewBox: '0 0 100 100', preserveAspectRatio: 'none', overflow: 'visible',
     })
+    const shadowFilter = registerShadowFilter(effectLst, ctx, refColor(effectRef))
     nested.appendChild(svgEl('path', {
       d,
       fill,
-      filter: registerShadowFilter(effectLst, ctx, refColor(effectRef)),
+      filter: shadowFilter,
       ...(ln ? lnOf(ln, ctx) : lnMatrix ? lnOf(lnMatrix, ctx, lnPh) : lnOf(null, ctx)),
       'fill-rule': meta?.evenodd ? 'evenodd' : undefined,
     }))
+    // 图片填充形状（SmartArt 照片节点、圆形头像、组合纹理填充等）：按形状 path 裁剪绘制
+    if (blipFill) {
+      const src = await blipFillSrc(blipFill, ctx)
+      if (src) {
+        const clipId = ctx.uid('clip')
+        const clipPath = svgEl('clipPath', { id: clipId })
+        clipPath.appendChild(svgEl('path', { d }))
+        ctx.defs.appendChild(clipPath)
+        // 组合填充：图片铺满组合子空间填充区域，形状只取样其覆盖部分；普通 blipFill 铺满形状自身
+        let ix = 0
+        let iy = 0
+        let iw = 100
+        let ih = 100
+        if (grpFill && blipFill === grpFill.fill) {
+          const gx = emu2pxF(grpFill.box.x)
+          const gy = emu2pxF(grpFill.box.y)
+          const gw = Math.max(0.00001, emu2pxF(grpFill.box.w))
+          const gh = Math.max(0.00001, emu2pxF(grpFill.box.h))
+          ix = ((gx - box.x) / box.w) * 100
+          iy = ((gy - box.y) / box.h) * 100
+          iw = (gw / box.w) * 100
+          ih = (gh / box.h) * 100
+        }
+        const srcRect = directChild(blipFill, 'a:srcRect')
+        const l = parseInt(attr(srcRect, 'l') ?? '0', 10) / 100000
+        const t = parseInt(attr(srcRect, 't') ?? '0', 10) / 100000
+        const r = parseInt(attr(srcRect, 'r') ?? '0', 10) / 100000
+        const b = parseInt(attr(srcRect, 'b') ?? '0', 10) / 100000
+        const sw = Math.max(0.00001, 1 - l - r)
+        const sh = Math.max(0.00001, 1 - t - b)
+        nested.appendChild(svgEl('image', {
+          x: ix - (l * iw) / sw,
+          y: iy - (t * ih) / sh,
+          width: iw / sw,
+          height: ih / sh,
+          href: src, preserveAspectRatio: 'none',
+          filter: shadowFilter, 'clip-path': `url(#${clipId})`,
+        }))
+      } else {
+        addSkipped(ctx.report, 'missingImage')
+      }
+    }
     g.appendChild(nested)
   }
 

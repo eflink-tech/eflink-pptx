@@ -207,6 +207,6 @@ export async function parseChartEl(
   const txPr = firstDescendant(root, 'c:txPr')
   const defRPr = txPr ? firstDescendant(txPr, 'a:defRPr') : null
   const szRaw = attr(defRPr, 'sz')
-  if (szRaw) chart.fontSize = Math.round(parseInt(szRaw, 10) / 100 / 0.75)
+  if (szRaw) chart.fontSize = Math.round((parseInt(szRaw, 10) / 100 / 0.75) * ctx.scale.x)
   return chart
 }
