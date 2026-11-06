@@ -11,6 +11,15 @@ export interface ConversationMessage {
   /** 关联产物（如已应用的大纲/页面 JSON） */
   payload?: unknown
   time: number
+  /** 模型思考过程（reasoning_content），仅支持推理的模型会返回 */
+  reasoning?: string
+  /** 随消息发送的图片（已压缩为 dataUrl） */
+  images?: MessageImage[]
+}
+
+/** 随消息发送的一张图片 */
+export interface MessageImage {
+  dataUrl: string
 }
 
 export interface Conversation {

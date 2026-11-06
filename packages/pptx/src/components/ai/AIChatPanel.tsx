@@ -1,20 +1,44 @@
 // AI 助手面板：设置 / 对话 / 生成大纲与整套页面 / 选中元素润色 / 会话历史
 import { useEffect, useRef, useState } from 'react'
 import { useI18n } from '@eflink-tech/office-kit'
-import { Settings, Trash2, X, Wand2, FileDown, Sparkles, History, ChevronLeft } from 'lucide-react'
+import { Settings, Trash2, X, Wand2, FileDown, Sparkles, History, ChevronLeft, Paperclip } from 'lucide-react'
 import { useEditorStore } from '../../store/editorStore'
 import { useUIStore, useToastStore } from '../../store/uiStore'
 import { aiSettingsStore, aiDb, BUILTIN_TEMPLATES } from '../../ai/db'
-import { errorMessage, sendMessage, type ChatMessage } from '../../ai/aiService'
+import { errorMessage, sendMessage, type ChatMessage, type ChatMessagePart } from '../../ai/aiService'
+import { compressImageFile } from '../../ai/imageCompressor'
 import {
   buildDeckPrompt, parseDeck, parseOutline, withOutputLanguage,
 } from '../../ai/systemPrompt'
 import { applyGeneratedDeck, applyOutline } from '../../ai/actionExecutor'
 import { ensureAiLegacyImport } from '../../storage/legacy'
-import type { AISettings, Conversation, OutlineResult } from '../../ai/types'
+import type { AISettings, Conversation, MessageImage, OutlineResult } from '../../ai/types'
 import { genId } from '../../core/utils/id'
+import { AiMessageBubble } from './AiMessageBubble'
 
 type PanelView = 'chat' | 'settings' | 'history'
+
+/** 面板内的会话条目：与持久化的 ConversationMessage 同构，time 在落库时补齐 */
+interface ChatEntry {
+  role: 'user' | 'assistant'
+  content: string
+  reasoning?: string
+  images?: MessageImage[]
+}
+
+const ACCENT = '#d14424'
+
+/** 本地会话条目 → OpenAI 协议消息：带图时改用 vision 数组结构 */
+function toApiMessages(entries: ChatEntry[]): ChatMessage[] {
+  return entries.map((m): ChatMessage => {
+    if (!m.images?.length) return { role: m.role, content: m.content }
+    const parts: ChatMessagePart[] = [
+      { type: 'text', text: m.content },
+      ...m.images.map((img) => ({ type: 'image_url' as const, image_url: { url: img.dataUrl } })),
+    ]
+    return { role: m.role, content: parts }
+  })
+}
 
 export function AIChatPanel() {
   const { t } = useI18n()
@@ -22,8 +46,9 @@ export function AIChatPanel() {
   const [view, setView] = useState<PanelView>('chat')
   const [settings, setSettings] = useState<AISettings>({ baseUrl: '', apiKey: '', model: '' })
   const [configured, setConfigured] = useState(false)
-  const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([])
+  const [messages, setMessages] = useState<ChatEntry[]>([])
   const [input, setInput] = useState('')
+  const [pendingImages, setPendingImages] = useState<MessageImage[]>([])
   const [busy, setBusy] = useState(false)
   const [outline, setOutline] = useState<OutlineResult | null>(null)
   const [topic, setTopic] = useState('')
@@ -32,6 +57,7 @@ export function AIChatPanel() {
   const [convId, setConvId] = useState<string | null>(null)
   const [historyList, setHistoryList] = useState<Conversation[]>([])
   const abortRef = useRef<AbortController | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -70,7 +96,7 @@ export function AIChatPanel() {
   }
 
   const openConversation = (conv: Conversation) => {
-    setMessages(conv.messages.map((m) => ({ role: m.role, content: m.content })))
+    setMessages(conv.messages.map((m) => ({ role: m.role, content: m.content, reasoning: m.reasoning, images: m.images })))
     setConvId(conv.id)
     setView('chat')
   }
@@ -86,7 +112,12 @@ export function AIChatPanel() {
     useToastStore.getState().toast(t('pptx.ai.settingsSaved'), 'success')
   }
 
-  const doSend = async (userText: string, onText?: (text: string) => string) => {
+  /**
+   * 发送一轮对话。images 为空时走纯文本，带图时拼成 vision 数组结构；
+   * 流式期间用 content/reasoning 两个缓冲区整体替换尾部 assistant 气泡，
+   * 结束后再以接口返回值覆盖一次，保证最终态与流式中间态一致。
+   */
+  const doSend = async (userText: string, onText?: (text: string) => string, images?: MessageImage[]) => {
     if (busy) return
     const s = await aiSettingsStore.getSettings()
     if (!s.baseUrl || !s.apiKey || !s.model) {
@@ -94,33 +125,79 @@ export function AIChatPanel() {
       return
     }
     const text = onText ? onText(userText) : userText
-    const next: Array<{ role: 'user' | 'assistant'; content: string }> = [...messages, { role: 'user', content: text }]
+    const next: ChatEntry[] = [...messages, { role: 'user', content: text, images: images?.length ? images : undefined }]
     setMessages(next)
     setInput('')
+    setPendingImages([])
     setBusy(true)
     const controller = new AbortController()
     abortRef.current = controller
 
     const chat: ChatMessage[] = [
       { role: 'system', content: t('pptx.ai.systemPrompt') },
-      ...next.map((m) => ({ role: m.role, content: m.content }) as ChatMessage),
+      ...toApiMessages(next),
     ]
 
+    let streamedContent = ''
+    let streamedReasoning = ''
+    const flush = () => {
+      setMessages([...next, {
+        role: 'assistant',
+        content: streamedContent,
+        reasoning: streamedReasoning || undefined,
+      }])
+    }
+
     try {
-      await sendMessage({
+      const result = await sendMessage({
         settings: s,
         messages: chat,
         signal: controller.signal,
         onContentChunk: (_chunk, full) => {
-          setMessages([...next, { role: 'assistant', content: full }])
+          streamedContent = full
+          flush()
+        },
+        onReasoningChunk: (_chunk, full) => {
+          streamedReasoning = full
+          flush()
         },
       })
+      setMessages([...next, {
+        role: 'assistant',
+        content: result.content,
+        reasoning: result.reasoning,
+      }])
     } catch (error) {
-      setMessages([...next, { role: 'assistant', content: `⚠️ ${errorMessage(error)}` }])
+      // 带图请求失败最常见的原因是模型不支持 vision，给出可操作提示
+      const visionHint = images?.length ? ` ${t('pptx.ai.visionHint')}` : ''
+      setMessages([...next, { role: 'assistant', content: `⚠️ ${errorMessage(error)}${visionHint}` }])
     } finally {
       setBusy(false)
       abortRef.current = null
     }
+  }
+
+  /** 批量压缩选择的/粘贴的图片，单个失败逐条提示，不阻断其余 */
+  const addImageFiles = async (files: File[]) => {
+    for (const file of files) {
+      try {
+        const dataUrl = await compressImageFile(file)
+        setPendingImages((prev) => [...prev, { dataUrl }])
+      } catch (error) {
+        useToastStore.getState().toast(t('pptx.ai.imageFailed', { reason: errorMessage(error) }), 'error')
+      }
+    }
+  }
+
+  /** 粘贴截图走压缩管道；纯文本粘贴不拦截 */
+  const handlePaste = (e: React.ClipboardEvent) => {
+    const files = Array.from(e.clipboardData?.items ?? [])
+      .filter((it) => it.kind === 'file' && it.type.startsWith('image/'))
+      .map((it) => it.getAsFile())
+      .filter((f): f is File => f !== null)
+    if (!files.length) return
+    e.preventDefault()
+    void addImageFiles(files)
   }
 
   const generateOutline = async () => {
@@ -231,7 +308,17 @@ export function AIChatPanel() {
   }
 
   return (
-    <div className="flex h-full w-[320px] shrink-0 flex-col border-l border-gray-200 bg-white" data-testid="ai-panel">
+    <div
+      className="flex h-full w-[320px] shrink-0 flex-col border-l border-gray-200 bg-white"
+      data-testid="ai-panel"
+      onKeyDown={(e) => {
+        // 焦点在面板内按 Esc 收起；画布/弹窗的 Esc 行为不受影响
+        if (e.key === 'Escape') {
+          e.stopPropagation()
+          ui.toggleAIPanel()
+        }
+      }}
+    >
       {/* 头部 */}
       <div className="flex h-10 shrink-0 items-center justify-between border-b border-gray-100 px-3">
         <span className="flex items-center gap-1 text-sm font-medium text-[#d14424]">
@@ -245,10 +332,10 @@ export function AIChatPanel() {
           <button className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600" title={t('pptx.ai.settings')} onClick={() => setView(view === 'settings' ? 'chat' : 'settings')}>
             <Settings size={15} />
           </button>
-          <button className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600" title={t('pptx.ai.newChat')} onClick={() => { setMessages([]); setOutline(null); setConvId(null); setView('chat') }}>
+          <button className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600" title={t('pptx.ai.newChat')} onClick={() => { setMessages([]); setOutline(null); setConvId(null); setPendingImages([]); setView('chat') }}>
             <Trash2 size={15} />
           </button>
-          <button className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600" onClick={() => ui.toggleAIPanel()}>
+          <button className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600" title={t('pptx.ai.close')} aria-label={t('pptx.ai.close')} onClick={() => ui.toggleAIPanel()}>
             <X size={15} />
           </button>
         </div>
@@ -384,9 +471,7 @@ export function AIChatPanel() {
                       </div>
                     )}
                 {messages.map((m, i) => (
-                  <div key={i} className={`rounded-md px-2.5 py-2 text-xs leading-relaxed whitespace-pre-wrap ${m.role === 'user' ? 'ml-6 bg-[#d14424] text-white' : 'mr-2 bg-gray-100 text-gray-700'}`}>
-                    {m.content}
-                  </div>
+                  <AiMessageBubble key={i} message={m} accent={ACCENT} streaming={busy && i === messages.length - 1} />
                 ))}
                 {canApplyToSelection && (
                   <button
@@ -415,37 +500,84 @@ export function AIChatPanel() {
                 </div>
               )}
 
-              {/* 输入区 */}
-              <div className="flex shrink-0 items-end gap-1.5 p-2">
-                <textarea
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault()
-                      if (input.trim()) void doSend(input.trim())
-                    }
-                  }}
-                  rows={2}
-                  placeholder={t('pptx.ai.inputPlaceholder')}
-                  className="flex-1 resize-none rounded-md border border-gray-200 px-2 py-1.5 text-xs focus:border-[#d14424] focus:outline-none"
-                  data-testid="ai-input"
-                />
-                {busy
-                  ? (
-                      <button className="rounded-md bg-gray-200 px-3 py-2 text-xs text-gray-600" onClick={() => abortRef.current?.abort()}>
-                        {t('pptx.ai.stop')}
-                      </button>
-                    )
-                  : (
-                      <button
-                        className="rounded-md bg-[#d14424] px-3 py-2 text-xs text-white hover:bg-[#b93a1d] disabled:opacity-50"
-                        disabled={!input.trim()}
-                        onClick={() => input.trim() && void doSend(input.trim())}
-                      >
-                        {t('pptx.ai.send')}
-                      </button>
-                    )}
+              {/* 输入区：待发送图片 → 附件按钮 → 多行输入 → 发送/停止 */}
+              <div className="shrink-0 border-t border-gray-100 p-2">
+                {pendingImages.length > 0 && (
+                  <div className="mb-1.5 flex flex-wrap gap-1.5" data-testid="ai-pending-images">
+                    {pendingImages.map((img, i) => (
+                      <div key={i} className="relative">
+                        <img
+                          src={img.dataUrl}
+                          alt={t('pptx.ai.imageAlt', { index: i + 1 })}
+                          className="h-12 w-12 rounded-md border border-gray-200 object-cover"
+                        />
+                        <button
+                          className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-gray-700 text-[10px] leading-none text-white"
+                          title={t('pptx.ai.removeImage')}
+                          onClick={() => setPendingImages((prev) => prev.filter((_, idx) => idx !== i))}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="flex items-end gap-1.5">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="sr-only"
+                    aria-hidden="true"
+                    tabIndex={-1}
+                    onChange={(e) => {
+                      const files = e.target.files ? Array.from(e.target.files) : []
+                      // 重置 value：连续选择同一张图片仍能触发 change
+                      e.target.value = ''
+                      void addImageFiles(files.filter((f) => f.type.startsWith('image/')))
+                    }}
+                  />
+                  <button
+                    className="rounded-md border border-gray-200 p-2 text-gray-500 hover:border-[#d14424] hover:text-[#d14424]"
+                    title={t('pptx.ai.attach')}
+                    aria-label={t('pptx.ai.attach')}
+                    data-testid="ai-attach"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Paperclip size={14} />
+                  </button>
+                  <textarea
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onPaste={handlePaste}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault()
+                        if (input.trim() || pendingImages.length) void doSend(input.trim(), undefined, pendingImages)
+                      }
+                    }}
+                    rows={2}
+                    placeholder={t('pptx.ai.inputPlaceholder')}
+                    className="flex-1 resize-none rounded-md border border-gray-200 px-2 py-1.5 text-xs focus:border-[#d14424] focus:outline-none"
+                    data-testid="ai-input"
+                  />
+                  {busy
+                    ? (
+                        <button className="rounded-md bg-gray-200 px-3 py-2 text-xs text-gray-600" onClick={() => abortRef.current?.abort()}>
+                          {t('pptx.ai.stop')}
+                        </button>
+                      )
+                    : (
+                        <button
+                          className="rounded-md bg-[#d14424] px-3 py-2 text-xs text-white hover:bg-[#b93a1d] disabled:opacity-50"
+                          disabled={!input.trim() && pendingImages.length === 0}
+                          onClick={() => void doSend(input.trim(), undefined, pendingImages)}
+                        >
+                          {t('pptx.ai.send')}
+                        </button>
+                      )}
+                </div>
               </div>
             </>
           )}

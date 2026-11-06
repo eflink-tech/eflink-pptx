@@ -26,7 +26,10 @@ export function AppLayout({ branding }: { branding?: OfficeHeaderBrand | false }
         <div className="min-w-0 flex-1">
           <EditableCanvas />
         </div>
-        {aiPanelVisible && <AIChatPanel />}
+        {/* AI 面板常驻挂载以保留会话状态，展开/收起由停靠位宽度过渡实现滑入滑出 */}
+        <div className="efk-ai-slot" data-open={aiPanelVisible}>
+          <AIChatPanel />
+        </div>
         <StylePanel />
       </div>
       <BottomBar />

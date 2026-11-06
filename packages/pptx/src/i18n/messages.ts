@@ -641,6 +641,14 @@ const ROWS = {
   'pptx.ai.userGenOutlineMsg': ['生成大纲：{topic}（{count} 页）', 'Generate an outline: {topic} ({count} slides)', 'Generar un esquema: {topic} ({count} diapositivas)', 'Gerar uma estrutura: {topic} ({count} slides)'],
   'pptx.ai.userGenSlidesMsg': ['根据大纲生成整套页面版式…', 'Generate all slide layouts from the outline…', 'Generar todas las diapositivas a partir del esquema…', 'Gerar todos os layouts a partir da estrutura…'],
   'pptx.ai.genOutlineDone': ['已生成「{topic}」大纲，共 {count} 页。', 'Outline for “{topic}” generated with {count} slides.', 'Esquema de “{topic}” generado con {count} diapositivas.', 'Estrutura de “{topic}” gerada com {count} slides.'],
+  'pptx.ai.close': ['收起 AI 助手（Esc）', 'Collapse AI assistant (Esc)', 'Contraer el asistente de IA (Esc)', 'Recolher o assistente de IA (Esc)'],
+  'pptx.ai.reasoning': ['思考过程', 'Reasoning', 'Razonamiento', 'Raciocínio'],
+  'pptx.ai.thinking': ['思考中…', 'Thinking…', 'Pensando…', 'Pensando…'],
+  'pptx.ai.attach': ['添加图片', 'Attach image', 'Adjuntar imagen', 'Anexar imagem'],
+  'pptx.ai.removeImage': ['移除图片', 'Remove image', 'Quitar imagen', 'Remover imagem'],
+  'pptx.ai.imageAlt': ['图片 {index}', 'Image {index}', 'Imagen {index}', 'Imagem {index}'],
+  'pptx.ai.imageFailed': ['图片处理失败：{reason}', 'Image processing failed: {reason}', 'Error al procesar la imagen: {reason}', 'Falha ao processar a imagem: {reason}'],
+  'pptx.ai.visionHint': ['若为图片相关问题，请确认所选模型支持视觉输入。', 'If the question involves images, check that the selected model supports vision input.', 'Si la pregunta incluye imágenes, comprueba que el modelo seleccionado admita entrada visual.', 'Se a pergunta incluir imagens, verifique se o modelo selecionado aceita entrada visual.'],
 
   // ── 模板 / 主题 ────────────────────────────────────────
   'pptx.template.title': ['模板库', 'Template library', 'Biblioteca de plantillas', 'Biblioteca de modelos'],
