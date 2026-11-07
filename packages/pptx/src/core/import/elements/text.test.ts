@@ -69,6 +69,18 @@ describe('txBodyToHTML', () => {
     expect(r.vertical).toBe(true)
   })
 
+  it('normAutofit@fontScale 折算字号与字距（固定框内缩字防折行）', async () => {
+    const txBody = el(`<p:txBody xmlns:p="urn:p" xmlns:a="urn:a">
+      <a:bodyPr><a:normAutofit fontScale="80000"/></a:bodyPr>
+      <a:p><a:r><a:rPr sz="1350" spc="300"/><a:t>绩效沟通与牵引</a:t></a:r></a:p>
+    </p:txBody>`)
+    const r = await txBodyToHTML(txBody, theme)
+    // 13.5pt → 18px，80% → 14.4px；字距 3pt → 4px，80% → 3.2px
+    expect(r.html).toContain('font-size:14.4px')
+    expect(r.html).toContain('letter-spacing:3.2px')
+    expect(r.autoSize).toBe(true)
+  })
+
   it('bodyPr insets 折算 padding；spAutoFit → autoFitShape', async () => {
     // 四边 0（常见于设计稿导出）：无内边距，且框随文本增高
     const zero = await txBodyToHTML(el(`<p:txBody xmlns:p="urn:p" xmlns:a="urn:a">

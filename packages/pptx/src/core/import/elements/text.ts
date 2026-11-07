@@ -78,8 +78,9 @@ function bulletKind(p: Element): 'none' | 'bullet' | 'number' {
 }
 
 /** run 字符样式提取：rPr 显式属性优先，缺失时按段落 defRPr → lstStyle defRPr 逐级回退。
- * 属性分两类：字号/粗斜下划线/字距在元素属性上，颜色/字体在子元素上，两类走同一回退链。 */
-function runStyles(rPr: Element | null, defRPrs: (Element | null)[], theme: PptxTheme, scale: number, defaultSz: number): string[] {
+ * 属性分两类：字号/粗斜下划线/字距在元素属性上，颜色/字体在子元素上，两类走同一回退链。
+ *  fontScale：normAutofit 的缩字系数（PowerPoint 把文本压进固定框时会缩小字号与字距）。 */
+function runStyles(rPr: Element | null, defRPrs: (Element | null)[], theme: PptxTheme, scale: number, defaultSz: number, fontScale = 1): string[] {
   const styles: string[] = []
   const attrOf = (name: string): string | null =>
     (rPr ? attr(rPr, name) : null) ?? defRPrs.map(d => (d ? attr(d, name) : null)).find(v => v !== null) ?? null
@@ -90,7 +91,8 @@ function runStyles(rPr: Element | null, defRPrs: (Element | null)[], theme: Pptx
   // 否则画布继承浏览器默认 16px 导致文字偏小
   // 保留两位小数：取整会让导出往返放大误差（20pt→26.67→27px→20.25pt，居中长文本错位累积）
   const szVal = sz ? parseInt(sz, 10) : defaultSz
-  styles.push(`font-size:${Math.round((szVal / 100 / 0.75) * scale * 100) / 100}px`)
+  const textScale = scale * fontScale
+  styles.push(`font-size:${Math.round((szVal / 100 / 0.75) * textScale * 100) / 100}px`)
   if (attrOf('b') === '1') styles.push('font-weight:bold')
   if (attrOf('i') === '1') styles.push('font-style:italic')
   // 下划线/删除线：sng/dbl 共存时合并为一条 text-decoration，dbl 另加 style
@@ -114,7 +116,7 @@ function runStyles(rPr: Element | null, defRPrs: (Element | null)[], theme: Pptx
   const spc = attrOf('spc')
   if (spc) {
     // 字距 1/100 pt → px（与 font-size 同源换算），保留两位小数防浮点噪声
-    const ls = Math.round((parseInt(spc, 10) / 100 / 0.75) * scale * 100) / 100
+    const ls = Math.round((parseInt(spc, 10) / 100 / 0.75) * textScale * 100) / 100
     styles.push(`letter-spacing:${ls}px`)
   }
   // 高亮底色
@@ -157,6 +159,15 @@ function runStyles(rPr: Element | null, defRPrs: (Element | null)[], theme: Pptx
   return styles
 }
 
+/** a:normAutofit@fontScale（1/1000 百分比）→ 字号缩放系数。
+ *  PowerPoint 用它把文本压进固定框（如单行标题），忽略会让 CJK 折行溢出。 */
+export function autofitFontScale(bodyPr: Element | null): number {
+  const norm = bodyPr ? directChild(bodyPr, 'a:normAutofit') : null
+  const raw = norm ? parseInt(attr(norm, 'fontScale') ?? '', 10) : NaN
+  if (!Number.isFinite(raw) || raw <= 0) return 1
+  return Math.min(1, Math.max(0.1, raw / 100000))
+}
+
 /** lstStyle → 段落级别对应的属性节点（a:lvl{N}pPr，未命中级别时回退 a:defPPr） */
 function lstLvlPrOf(lst: Element | null, lvl: number): Element | null {
   if (!lst) return null
@@ -177,7 +188,7 @@ export function lstAlgnOf(lst: Element | null, lvl: number): string | null {
   return lvlPr ? attr(lvlPr, 'algn') : null
 }
 
-async function paragraphToInner(p: Element, theme: PptxTheme, pkg: PptxPackage | undefined, partPath: string, defRPrs: (Element | null)[], scale: number, defaultSz: number): Promise<string> {
+async function paragraphToInner(p: Element, theme: PptxTheme, pkg: PptxPackage | undefined, partPath: string, defRPrs: (Element | null)[], scale: number, defaultSz: number, fontScale = 1): Promise<string> {
   let inner = ''
   for (const node of Array.from(p.children)) {
     if (node.localName === 'br') {
@@ -190,7 +201,7 @@ async function paragraphToInner(p: Element, theme: PptxTheme, pkg: PptxPackage |
     const text = t?.textContent ?? ''
     if (!text) continue
     const rPr = firstDescendant(node, 'a:rPr')
-    const styles = runStyles(rPr, defRPrs, theme, scale, defaultSz)
+    const styles = runStyles(rPr, defRPrs, theme, scale, defaultSz, fontScale)
     const styleAttr = styles.length ? ` style="${styles.join(';')}"` : ''
     let run = `<span${styleAttr}>${escapeHTML(text)}</span>`
     // 超链接：a:hlinkClick@r:id → rels（External，仅放行 http/https/mailto 白名单协议）；无包上下文时跳过
@@ -236,6 +247,8 @@ export async function txBodyToHTML(
   const defaultSz = opts?.defaultSz ?? 1800
   const bodyPr = directChild(txBody, 'a:bodyPr') ?? inherit?.bodyPr ?? null
   const autoSize = Boolean(bodyPr && directChild(bodyPr, 'a:normAutofit'))
+  // 字号按 normAutofit 缓存比例折算：与 PowerPoint 排版一致，避免固定框内折行/溢出
+  const fontScale = autofitFontScale(bodyPr)
   const vert = attr(bodyPr, 'vert')
   const vertical = vert === 'eaVert' || vert === 'vert' || vert === 'mongolianVert'
   // insets（EMU→px）：OOXML 默认 tIns/bIns=45720；padding 单值取上下平均
@@ -264,7 +277,7 @@ export async function txBodyToHTML(
     // 源文件常把字号/颜色/行距只写在段落 defRPr（目录标题、封面主标题等），缺失会导致字号颜色整体丢失
     const pDefRPr = pPr ? directChild(pPr, 'a:defRPr') : null
     const lstLvlPr = lstLvlPrOf(lst, lvl)
-    const inner = await paragraphToInner(p, theme, pkg, partPath, [pDefRPr, defRPrOf(lst, lvl)], scale, defaultSz)
+    const inner = await paragraphToInner(p, theme, pkg, partPath, [pDefRPr, defRPrOf(lst, lvl)], scale, defaultSz, fontScale)
     // 行距：spcPct（1/100000）是相对 PowerPoint 单倍行距的比例，单倍行距≈1.2em（CJK 字体
     // ascent/descent 约为 1.2），直接当 CSS line-height 会让全文行距偏紧约 17%；
     // spcPts（1/100 pt → px）覆盖；val 非法/非正数时跳过，避免产出 line-height:0 压扁文字
@@ -275,7 +288,7 @@ export async function txBodyToHTML(
     if (Number.isFinite(pctVal) && pctVal > 0) spacing = `line-height:${Math.round((pctVal / 100000) * 1.2 * 1000) / 1000}`
     const pts = lnSpc ? firstDescendant(lnSpc, 'a:spcPts') : null
     const ptsVal = pts ? parseInt(attr(pts, 'val') ?? '', 10) : NaN
-    if (Number.isFinite(ptsVal) && ptsVal > 0) spacing = `line-height:${Math.round((ptsVal / 100 / 0.75) * scale * 100) / 100}px`
+    if (Number.isFinite(ptsVal) && ptsVal > 0) spacing = `line-height:${Math.round((ptsVal / 100 / 0.75) * scale * fontScale * 100) / 100}px`
     // 段前/段后 + 层级缩进 + 阅读方向（RTL）
     const extra: string[] = []
     const mt = paraMargin(pPr, 'a:spcBef', scale)

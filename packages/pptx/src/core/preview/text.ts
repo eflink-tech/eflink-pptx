@@ -1,5 +1,5 @@
 /** a:txBody → foreignObject：复用 txBodyToHTML（已 XSS 加固：escapeHTML + 链接协议白名单）。
- * 不做 normAutofit fontScale 缩放（已知取舍），ins/anchor/wrap/vert 按 bodyPr 直渲。 */
+ *  normAutofit@fontScale 已在 txBodyToHTML 内折算字号，ins/anchor/wrap/vert 按 bodyPr 直渲。 */
 import { attr, directChild } from '../import/xml'
 import { txBodyToHTML } from '../import/elements/text'
 import { emu2pxF, svgEl, type PreviewCtx, type Box } from './svg'
