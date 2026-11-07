@@ -3,7 +3,7 @@
 // 远端/云端保存仅由手动触发，成功后才置 dirty=false。
 import type { Presentation } from '../../types/slides'
 import { createPresentation } from '../../types/slides'
-import { pptxDb, type PPTDocRecord } from '../../files/db'
+import { pptxDb, type PPTDocRecord, type PPTDraftRecord } from '../../files/db'
 import { genId } from '../utils/id'
 import { LAST_DOC_KEY, MIRROR_KEY } from '../../storage/keys'
 import { ensureLegacyImport } from '../../storage/legacy'
@@ -64,7 +64,12 @@ export interface LoadedDoc {
   id: string
   name: string
   presentation: Presentation
+  /** 启动时恢复了未保存草稿：调用方应保持 dirty（登录态下等待保存上云） */
+  restoredDraft?: boolean
 }
+
+/** localStorage 镜像写满（大文档）后本次会话停用内容镜像，改用 IndexedDB 草稿 */
+let mirrorDisabled = false
 
 /** localStorage 镜像（毫秒级写入，Dexie 节流写）。
  * 指针始终更新；内容镜像仅本地模式维护——后端模式远端是单一数据源，
@@ -75,10 +80,67 @@ export function writeMirror(docId: string | undefined, name: string, presentatio
   try {
     // 自定义后端模式下仅维护"当前文档 id"指针，停用内容镜像（远端是单一数据源）
     localStorage.setItem(LAST_DOC_KEY, docId)
-    if (hasBackend()) return
-    localStorage.setItem(MIRROR_KEY, JSON.stringify({ id: docId, name, presentation }))
+    if (hasBackend() || mirrorDisabled) return
+    try {
+      localStorage.setItem(MIRROR_KEY, JSON.stringify({ id: docId, name, presentation }))
+    } catch {
+      // 大文档超配额：清掉可能属于其他文档的旧镜像（防止刷新时串稿），
+      // 本次会话改由 IndexedDB 草稿兜底，避免每次变更都重复序列化整份文稿
+      mirrorDisabled = true
+      try { localStorage.removeItem(MIRROR_KEY) } catch { /* 忽略 */ }
+    }
   } catch {
     /* 存储满等异常忽略 */
+  }
+}
+
+const DRAFT_DELAY_MS = 800
+let draftTimer: ReturnType<typeof setTimeout> | undefined
+let draftPending: PPTDraftRecord | null = null
+
+/** 内容变更时调用：节流写 IndexedDB 草稿（localStorage 装不下的大文档也能刷新恢复） */
+export function scheduleDraft(docId: string | undefined, name: string, presentation: Presentation): void {
+  if (!docId) return
+  draftPending = { id: docId, name, presentation, savedAt: Date.now() }
+  if (draftTimer) clearTimeout(draftTimer)
+  draftTimer = setTimeout(() => {
+    draftTimer = undefined
+    void flushDraft()
+  }, DRAFT_DELAY_MS)
+}
+
+/** 立即落草稿（测试/离开页面时调用） */
+export async function flushDraft(): Promise<void> {
+  if (draftTimer) {
+    clearTimeout(draftTimer)
+    draftTimer = undefined
+  }
+  const rec = draftPending
+  draftPending = null
+  if (!rec) return
+  try {
+    await ensureLegacyImport()
+    await pptxDb.drafts.put(rec)
+  } catch {
+    /* IndexedDB 不可用（隐私模式等）时由 localStorage 镜像兜底 */
+  }
+}
+
+async function getDraft(id: string): Promise<PPTDraftRecord | undefined> {
+  try {
+    await ensureLegacyImport()
+    return await pptxDb.drafts.get(id)
+  } catch {
+    return undefined
+  }
+}
+
+async function deleteDraft(id: string): Promise<void> {
+  try {
+    await ensureLegacyImport()
+    await pptxDb.drafts.delete(id)
+  } catch {
+    /* 忽略 */
   }
 }
 
@@ -97,16 +159,26 @@ export async function loadStartupDoc(bootDocId?: string, untitledName = '未命�
     return { id: genId('doc-'), name: untitledName, presentation: createPresentation(genId('slide-')) }
   }
 
-  // 登录态（自定义后端）：远端优先，镜像仅作草稿兜底
+  // 登录态（自定义后端）：远端优先，本地草稿仅在不旧于远端时恢复
   if (hasBackend()) {
     let lastId: string | null = null
     try { lastId = localStorage.getItem(LAST_DOC_KEY) } catch { /* 忽略 */ }
     if (lastId) {
+      let rec: PPTDocRecord | undefined
       try {
-        const rec = await dbGet(lastId)
+        rec = await dbGet(lastId)
         // 远端有此文档：以远端为准（镜像里的未保存草稿不覆盖远端内容）
-        if (rec) return { id: rec.id, name: rec.name, presentation: rec.presentation }
-      } catch { /* 远端加载失败 → 回退镜像草稿 */ }
+      } catch { /* 远端加载失败 → 回退本地草稿 */ }
+      const draft = await getDraft(lastId)
+      if (draft?.presentation?.slides?.length) {
+        // 草稿更新（保存前刷新/更新弹窗重载）：恢复并保持 dirty，等待下次保存
+        if (!rec || draft.savedAt > rec.updatedAt) {
+          return { id: draft.id, name: draft.name, presentation: draft.presentation, restoredDraft: true }
+        }
+        // 远端已包含更新的内容：丢弃过期草稿
+        void deleteDraft(lastId)
+      }
+      if (rec) return { id: rec.id, name: rec.name, presentation: rec.presentation }
     }
     // 远端无此文档或加载失败：镜像仅当属于同一文档（id 与指针一致）时才作为其未保存草稿恢复。
     // 不校验 id 会把「上次编辑的其他文档」整份打开——新建空文档会显示旧文档内容，
@@ -116,7 +188,7 @@ export async function loadStartupDoc(bootDocId?: string, untitledName = '未命�
       const mirror = localStorage.getItem(MIRROR_KEY)
       if (mirror && lastId) {
         const parsed = JSON.parse(mirror) as LoadedDoc
-        if (parsed?.presentation?.slides?.length && parsed.id && parsed.id === lastId) return parsed
+        if (parsed?.presentation?.slides?.length && parsed.id && parsed.id === lastId) return { ...parsed, restoredDraft: true }
       }
     } catch { /* 忽略坏数据 */ }
     return { id: genId('doc-'), name: untitledName, presentation: createPresentation(genId('slide-')) }
@@ -150,6 +222,15 @@ export async function loadStartupDoc(bootDocId?: string, untitledName = '未命�
     }
   } catch { /* 忽略坏数据 */ }
 
+  // 镜像写不进（大文档超 localStorage 配额）时，恢复 IndexedDB 草稿
+  try {
+    const lastId = localStorage.getItem(LAST_DOC_KEY)
+    if (lastId) {
+      const draft = await getDraft(lastId)
+      if (draft?.presentation?.slides?.length) return { id: draft.id, name: draft.name, presentation: draft.presentation }
+    }
+  } catch { /* Dexie 不可用 */ }
+
   try {
     const lastId = localStorage.getItem(LAST_DOC_KEY)
     if (lastId) {
@@ -171,6 +252,13 @@ export async function saveDoc(docId: string | undefined, name: string, presentat
     const existing = await dbGet(docId)
     if (existing) rec.createdAt = existing.createdAt
     await dbPut(rec)
+    // 已落库：草稿使命结束（登录态下也避免下次启动把旧草稿当未保存内容恢复）
+    if (draftTimer) {
+      clearTimeout(draftTimer)
+      draftTimer = undefined
+    }
+    draftPending = null
+    await deleteDraft(docId)
   } catch (err) {
     // 本地模式：镜像已写入，容忍 Dexie 失败；登录态（后端）：向上抛出，
     // 让调用方提示"保存失败"，dirty 保持 true（严禁把失败当成已保存）
@@ -194,6 +282,7 @@ export async function createDoc(name: string): Promise<LoadedDoc> {
 
 export async function deleteDoc(docId: string): Promise<void> {
   try { await dbRemove(docId) } catch { /* 忽略 */ }
+  await deleteDraft(docId)
   if (localStorage.getItem(LAST_DOC_KEY) === docId) {
     localStorage.removeItem(LAST_DOC_KEY)
     localStorage.removeItem(MIRROR_KEY)
@@ -221,6 +310,8 @@ export async function duplicateDoc(docId: string): Promise<LoadedDoc | null> {
  * 本地模式尽力而为；登录态（后端）失败时向上抛出，由调用方提示"重命名失败"（名字保持原值）。 */
 export async function renameDoc(docId: string, name: string, presentation?: Presentation): Promise<void> {
   try {
+    const draft = await getDraft(docId)
+    if (draft) await pptxDb.drafts.put({ ...draft, name })
     const rec = await dbGet(docId)
     if (rec) {
       await dbPut({ ...rec, name, updatedAt: Date.now() })

@@ -1,6 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPresentation } from '../../types/slides'
-import { loadStartupDoc, setPptxStorageBackend, writeMirror, LAST_DOC_KEY, MIRROR_KEY } from './persistence'
+import { pptxDb } from '../../files/db'
+import {
+  flushDraft,
+  loadStartupDoc,
+  saveDoc,
+  scheduleDraft,
+  setPptxStorageBackend,
+  writeMirror,
+  LAST_DOC_KEY,
+  MIRROR_KEY,
+} from './persistence'
 
 /** 登录态（自定义后端）存储桩：get 桩可按用例改写 */
 const backendGet = vi.fn()
@@ -59,5 +69,73 @@ describe('loadStartupDoc（后端模式）镜像兜底', () => {
     const mirror = JSON.parse(localStorage.getItem(MIRROR_KEY) ?? 'null')
     expect(mirror.id).toBe('doc-local')
     expect(mirror.presentation.slides[0].id).toBe('s-l')
+  })
+})
+
+describe('未保存草稿（IndexedDB，刷新恢复）', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    localStorage.clear()
+    await pptxDb.drafts.clear()
+    await pptxDb.documents.clear()
+  })
+  afterEach(() => {
+    setPptxStorageBackend(null)
+  })
+
+  it('游客大文档（localStorage 镜像写不进）从草稿恢复', async () => {
+    setPptxStorageBackend(null)
+    localStorage.setItem(LAST_DOC_KEY, 'doc-L')
+    scheduleDraft('doc-L', '大文稿', createPresentation('s-draft'))
+    await flushDraft()
+    expect(localStorage.getItem(MIRROR_KEY)).toBeNull()
+    const doc = await loadStartupDoc()
+    expect(doc.id).toBe('doc-L')
+    expect(doc.presentation.slides[0].id).toBe('s-draft')
+  })
+
+  it('登录态：草稿比远端新时恢复并标记为未保存', async () => {
+    setPptxStorageBackend(backend)
+    localStorage.setItem(LAST_DOC_KEY, 'doc-B')
+    backendGet.mockResolvedValue({
+      id: 'doc-B',
+      name: '远端版',
+      presentation: createPresentation('s-remote'),
+      createdAt: 1,
+      updatedAt: Date.now() - 60_000,
+    })
+    scheduleDraft('doc-B', '本地版', createPresentation('s-local'))
+    await flushDraft()
+    const doc = await loadStartupDoc()
+    expect(doc.id).toBe('doc-B')
+    expect(doc.presentation.slides[0].id).toBe('s-local')
+    expect(doc.restoredDraft).toBe(true)
+  })
+
+  it('登录态：远端更新更晚时用远端并丢弃过期草稿', async () => {
+    setPptxStorageBackend(backend)
+    localStorage.setItem(LAST_DOC_KEY, 'doc-B')
+    backendGet.mockResolvedValue({
+      id: 'doc-B',
+      name: '远端版',
+      presentation: createPresentation('s-remote'),
+      createdAt: 1,
+      updatedAt: Date.now() + 60_000,
+    })
+    scheduleDraft('doc-B', '本地版', createPresentation('s-local'))
+    await flushDraft()
+    const doc = await loadStartupDoc()
+    expect(doc.presentation.slides[0].id).toBe('s-remote')
+    expect(await pptxDb.drafts.get('doc-B')).toBeUndefined()
+  })
+
+  it('保存成功后清除草稿', async () => {
+    setPptxStorageBackend(null)
+    localStorage.setItem(LAST_DOC_KEY, 'doc-S')
+    scheduleDraft('doc-S', '文稿', createPresentation('s-1'))
+    await flushDraft()
+    expect(await pptxDb.drafts.get('doc-S')).toBeDefined()
+    await saveDoc('doc-S', '文稿', createPresentation('s-1'))
+    expect(await pptxDb.drafts.get('doc-S')).toBeUndefined()
   })
 })

@@ -6,7 +6,7 @@
 import { useEffect, useState, type JSX } from 'react'
 import { I18nProvider, useI18n, type OfficeHeaderBrand, type OfficeLocale } from '@eflink-tech/office-kit'
 import { AppLayout } from './components/layout/AppLayout'
-import { loadStartupDoc, saveDoc, writeMirror, MIRROR_KEY } from './core/editor/persistence'
+import { loadStartupDoc, saveDoc, writeMirror, scheduleDraft, MIRROR_KEY } from './core/editor/persistence'
 import { useEditorStore } from './store/editorStore'
 import { PPTX_MESSAGES } from './i18n/messages'
 import { setPptxLocale } from './i18n/runtime'
@@ -72,11 +72,14 @@ function PptxEditorInner({ bootDocId, branding }: Omit<PptxEditorProps, 'locale'
       const doc = await loadStartupDoc(bootDocId, t('pptx.untitled'))
       if (cancelled) return
       useEditorStore.getState().loadDocument(doc)
+      // 恢复的是未保存草稿：保持 dirty（登录态下等待保存上云，账号态刷新不再丢改动）
+      if (doc.restoredDraft) useEditorStore.setState({ dirty: true })
 
       // 本地草稿镜像：订阅 dirty 标记，引用比较检测 presentation 变化，立即写 localStorage
       // （毫秒级，防崩溃丢稿；不调用远端、不清除 dirty）。必须经 writeMirror 写入：
       // 后端模式只更新指针、停用内容镜像（远端是单一数据源）——直接写镜像会让登录态
       // 残留其他文档的本地内容，启动加载可能把它误当草稿恢复（打开成旧文档）
+      // 同步节流写 IndexedDB 草稿：localStorage 装不下的大文档（导入的整套 PPT）也能刷新恢复
       let lastPresentation = useEditorStore.getState().presentation
       unsubscribe = useEditorStore.subscribe((state) => {
         if (!state.dirty) return
@@ -85,6 +88,7 @@ function PptxEditorInner({ bootDocId, branding }: Omit<PptxEditorProps, 'locale'
         const { docId, docName } = useEditorStore.getState()
         if (!docId) return // docId 未初始化时不写入（避免 JSON.stringify 丢弃 undefined 字段）
         writeMirror(docId, docName, state.presentation)
+        scheduleDraft(docId, docName, state.presentation)
       })
       setReady(true)
     })().catch((err) => {
