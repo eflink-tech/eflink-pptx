@@ -81,6 +81,26 @@ describe('parseTableEl', () => {
     expect(result.cells[0][1]?.text).toBe('普通')
   })
 
+  it('外框尺寸取行高/列宽之和，忽略偏大的 xfrm@ext（否则表格被拉高压住下方元素）', async () => {
+    const pkg = await makePkg()
+    const cell = '<a:tc><a:txBody><a:p><a:r><a:t>x</a:t></a:r></a:p></a:txBody></a:tc>'
+    const xml = `<p:graphicFrame xmlns:p="urn:p" xmlns:a="urn:a">
+      <p:nvGraphicFramePr><p:cNvPr id="2" name="T"/></p:nvGraphicFramePr>
+      <p:xfrm><a:off x="0" y="0"/><a:ext cx="1905000" cy="1905000"/></p:xfrm>
+      <a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/table">
+        <a:tbl>
+          <a:tblGrid><a:gridCol w="952500"/><a:gridCol w="952500"/></a:tblGrid>
+          <a:tr h="476250">${cell}${cell}</a:tr>
+          <a:tr h="476250">${cell}${cell}</a:tr>
+        </a:tbl>
+      </a:graphicData></a:graphic>
+    </p:graphicFrame>`
+    const result = await parseTableEl(el(xml), ctxBase(pkg), IDENTITY_XFORM, pkg)
+    if (result?.type !== 'table') throw new Error('expected table')
+    expect(result.w).toBe(200)
+    expect(result.h).toBe(100)
+  })
+
   it('tcPr 显式黑色边框 → bordercolor/borderwidth + 表级 outline 同色', async () => {
     const pkg = await makePkg()
     const xml = `<p:graphicFrame xmlns:p="urn:p" xmlns:a="urn:a">

@@ -210,23 +210,25 @@ export async function parseTableEl(
   xf: GroupXform,
   _pkg: PptxPackage,
 ): Promise<TableElement | null> {
-  const geom = parseFrameGeom(node, xf, ctx)
-  if (!geom) return null
-  const { x, y, w, h } = geom
-
   const tbl = firstDescendant(node, 'a:tbl')
   if (!tbl) return null
-  const tblStyle = await resolveTableStyle(tbl, ctx.pkg, ctx.theme)
-  // 内置样式 GUID 已按规范基础定义还原；仅无法识别的 GUID 才计入报告
-  const tblPr = directChild(tbl, 'a:tblPr')
-  const styleId = tblPr ? directChild(tblPr, 'a:tableStyleId') : null
-  if (!tblStyle && styleId?.textContent?.trim()) addSkipped(ctx.report, 'tableStyleBuiltin')
   const gridCols = directChildren(firstDescendant(node, 'a:tblGrid') ?? tbl, 'a:gridCol')
   const colSizesRaw = sizesWithFallback(gridCols.map((c) => parseInt(attr(c, 'w') ?? '0', 10)))
   const colTotal = colSizesRaw.reduce((a, b) => a + b, 0) || 1
   const trs = directChildren(tbl, 'a:tr')
   const rowSizesRaw = sizesWithFallback(trs.map((tr) => parseInt(attr(tr, 'h') ?? '0', 10)))
   const rowTotal = rowSizesRaw.reduce((a, b) => a + b, 0) || 1
+  // 表格外框取列宽/行高之和而非 xfrm@ext：ext 是排版缓存，常残留旧值（远大于实际高度），
+  // 直接采用会把表格拉高、与下方表格重叠；PowerPoint 本身也按 gridCol/tr@h 排版。
+  const geom = parseFrameGeom(node, xf, ctx, { w: colTotal, h: rowTotal })
+  if (!geom) return null
+  const { x, y, w, h } = geom
+
+  const tblStyle = await resolveTableStyle(tbl, ctx.pkg, ctx.theme)
+  // 内置样式 GUID 已按规范基础定义还原；仅无法识别的 GUID 才计入报告
+  const tblPr = directChild(tbl, 'a:tblPr')
+  const styleId = tblPr ? directChild(tblPr, 'a:tableStyleId') : null
+  if (!tblStyle && styleId?.textContent?.trim()) addSkipped(ctx.report, 'tableStyleBuiltin')
 
   const { cells, tcEls } = buildCellMatrix(tbl, ctx.theme, tblStyle, ctx.scale.x)
   // 模型限制：单元格只存单一文本与单一边框；富文本/四边不一致在此如实报告

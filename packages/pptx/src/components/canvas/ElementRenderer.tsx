@@ -65,8 +65,9 @@ function TextItem({
     display: el.valign && el.valign !== 'top' ? 'flex' : undefined,
     flexDirection: 'column',
     justifyContent: el.valign === 'middle' ? 'center' : el.valign === 'bottom' ? 'flex-end' : undefined,
-    // autoFit（源 spAutoFit）：PowerPoint 文本框内容超高时溢出显示而非裁剪（内联样式覆盖 overflow-hidden 类）
-    overflow: el.autoFit ? 'visible' : undefined,
+    // 文本框文字永不裁剪：PowerPoint 的 noAutofit/spAutoFit 都允许内容溢出框外显示，
+    // 只有 normAutofit（autoSize）靠缩字适应；裁剪会把多行/折行文字截掉。
+    overflow: 'visible',
     WebkitTextStroke: el.textStroke ? `${el.textStroke.width}px ${el.textStroke.color}` : undefined,
     textShadow: el.shadow ? `${el.shadow.h}px ${el.shadow.v}px ${el.shadow.blur}px ${el.shadow.color}` : undefined,
     writingMode: el.vertical ? 'vertical-rl' : undefined,

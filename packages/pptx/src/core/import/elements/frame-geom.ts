@@ -48,8 +48,14 @@ export function mapEmuBox(
   }
 }
 
-/** 解析节点 xfrm（graphicFrame 用 p:xfrm，pic 用 a:xfrm）并折算组合变换 + 画布缩放（EMU→px 96dpi） */
-export function parseFrameGeom(node: Element, xf: GroupXform, ctx: ParseContext): FrameGeom | null {
+/** 解析节点 xfrm（graphicFrame 用 p:xfrm，pic 用 a:xfrm）并折算组合变换 + 画布缩放（EMU→px 96dpi）。
+ *  size 覆盖 ext 尺寸：表格的 ext 只是缓存值，可能远大于各行高之和（PowerPoint 按行高排版）。 */
+export function parseFrameGeom(
+  node: Element,
+  xf: GroupXform,
+  ctx: ParseContext,
+  size?: { w: number; h: number },
+): FrameGeom | null {
   const xfrm = firstDescendant(node, 'p:xfrm') ?? firstDescendant(node, 'a:xfrm')
   const off = xfrm ? directChild(xfrm, 'a:off') : null
   const ext = xfrm ? directChild(xfrm, 'a:ext') : null
@@ -57,7 +63,7 @@ export function parseFrameGeom(node: Element, xf: GroupXform, ctx: ParseContext)
   return mapEmuBox(xf, {
     x: parseInt(attr(off, 'x') ?? '0', 10),
     y: parseInt(attr(off, 'y') ?? '0', 10),
-    w: parseInt(attr(ext, 'cx') ?? '0', 10),
-    h: parseInt(attr(ext, 'cy') ?? '0', 10),
+    w: size?.w ?? parseInt(attr(ext, 'cx') ?? '0', 10),
+    h: size?.h ?? parseInt(attr(ext, 'cy') ?? '0', 10),
   }, ctx.scale)
 }
